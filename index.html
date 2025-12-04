@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>漫展战术终端 Ultimate</title>
+    <title>漫展战术终端</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -29,7 +29,7 @@
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* 状态条样式：确保填满高度 */
+        /* 状态条样式 */
         .status-pending { border-left: 5px solid #94a3b8; }
         .status-bought { border-left: 5px solid #06b6d4; }
         .status-soldout { border-left: 5px solid #ef4444; opacity: 0.7; filter: grayscale(100%); }
@@ -44,8 +44,8 @@
         .menu-pop-enter-active, .menu-pop-leave-active { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .menu-pop-enter-from, .menu-pop-leave-to { opacity: 0; transform: translateY(10px) scale(0.95); }
 
-        .fade-blur-enter-active, .fade-blur-leave-active { transition: opacity 0.3s ease; }
-        .fade-blur-enter-from, .fade-blur-leave-to { opacity: 0; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
 
         .map-pin {
             position: absolute; transform: translate3d(-50%, -100%, 0);
@@ -58,7 +58,7 @@
 
 <div id="app" class="w-full h-screen flex flex-col bg-slate-50 overflow-hidden relative">
 
-    <header class="bg-white/90 backdrop-blur-md px-5 py-4 z-10 flex justify-center items-center sticky top-0 shrink-0 border-b border-gray-100">
+    <header class="bg-white/95 backdrop-blur-sm px-5 py-4 z-10 flex justify-center items-center sticky top-0 shrink-0 border-b border-gray-100 shadow-sm">
         <div class="font-bold text-lg text-gray-800 flex items-center gap-2">
             <i class="fa-solid fa-map-location-dot text-cyan-primary text-xl"></i>
             <span class="tracking-wide">漫展战术终端</span>
@@ -78,7 +78,7 @@
             </button>
         </div>
 
-        <div v-if="filteredBooths.length > 0" class="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 min-h-[50vh]">
+        <div v-if="filteredBooths.length > 0" class="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 items-start min-h-[50vh]">
             <div v-for="booth in filteredBooths" :key="booth.id" @click="viewBooth(booth)"
                 class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 active:scale-95 cursor-pointer relative group border border-gray-50 flex flex-col">
                 
@@ -88,7 +88,7 @@
                     <div v-if="booth.status === 'soldout'" class="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-bold tracking-[0.2em] backdrop-blur-[2px]">SOLD OUT</div>
                 </div>
 
-                <div class="p-3 flex-1 flex flex-col justify-center" :class="'status-' + booth.status">
+                <div class="p-3" :class="'status-' + booth.status">
                     <h3 class="font-bold text-gray-800 text-sm truncate">{{ booth.name }}</h3>
                     <p class="text-xs text-gray-400 mt-1 truncate">{{ booth.goods || '暂无商品描述...' }}</p>
                 </div>
@@ -101,8 +101,8 @@
         </div>
     </main>
 
-    <transition name="fade-blur">
-        <div v-if="isMenuOpen" @click="isMenuOpen = false" class="fixed inset-0 bg-white/60 backdrop-blur-md z-20"></div>
+    <transition name="fade">
+        <div v-if="isMenuOpen" @click="isMenuOpen = false" class="fixed inset-0 bg-white/60 z-20"></div>
     </transition>
 
     <div class="fixed bottom-8 right-6 flex flex-col items-end gap-4 z-30">
@@ -138,7 +138,7 @@
     <transition name="slide-up">
         <div v-if="activeBooth" class="fixed inset-0 z-40 flex flex-col justify-end sm:justify-center sm:items-center">
             
-            <div @click="closeDetail" class="absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity"></div>
+            <div @click="closeDetail" class="absolute inset-0 bg-black/40 transition-opacity"></div>
             
             <div class="bg-white w-full h-[92vh] sm:h-[85vh] sm:w-[500px] sm:rounded-3xl rounded-t-3xl shadow-2xl relative flex flex-col overflow-hidden z-50 will-change-transform"
                  :style="{ transform: `translate3d(0, ${dragOffset}px, 0)`, transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }"
@@ -215,8 +215,8 @@
         </div>
     </transition>
 
-    <transition name="fade-blur">
-        <div v-if="isEditing" class="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-6">
+    <transition name="fade">
+        <div v-if="isEditing" class="fixed inset-0 z-50 bg-white/40 backdrop-blur-sm flex items-center justify-center p-6">
             <div class="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden animate-[pop_0.3s_ease-out]">
                 <div class="px-5 py-4 border-b border-gray-50 font-bold text-center text-lg text-gray-800">
                     {{ form.id ? '编辑摊位' : '记录新摊位' }}
@@ -339,10 +339,10 @@
             const isDragging = ref(false);
             const touchStartY = ref(0);
             
-            // 列表手势变量
             let listStartX = 0;
             let listStartY = 0;
             let isHorizontalSwipe = false;
+            let isLocked = false;
 
             const filteredBooths = computed(() => {
                 if (currentFilter.value === 'all') return booths.value;
@@ -355,40 +355,49 @@
                 globalSettings.mapImage = await dbUtils.getSetting('mapImage');
             });
 
-            // --- 修复点2: 手势方向锁 (Touch Lock) ---
+            // 修复2: 优化的手势锁
             const handleListTouchStart = (e) => {
                 listStartX = e.touches[0].clientX;
                 listStartY = e.touches[0].clientY;
-                isHorizontalSwipe = false; // 重置锁
+                isHorizontalSwipe = false; 
+                isLocked = false;
             };
             
             const handleListTouchMove = (e) => {
+                if (isLocked && !isHorizontalSwipe) return; // 已锁定为垂直，不再检测
+
                 const dx = e.touches[0].clientX - listStartX;
                 const dy = e.touches[0].clientY - listStartY;
                 
-                // 如果横向移动距离 > 纵向，且横向移动超过 10px，锁定为横向模式
-                if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
-                    isHorizontalSwipe = true;
+                // 首次移动检测：判定意图
+                if (!isLocked) {
+                    // 如果横向移动 > 纵向，判定为横滑
+                    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 5) {
+                        isHorizontalSwipe = true;
+                        isLocked = true;
+                    } else if (Math.abs(dy) > 5) {
+                        isHorizontalSwipe = false;
+                        isLocked = true;
+                    }
                 }
                 
-                // 如果已锁定为横向滑动，禁止浏览器默认的上下滚动
+                // 如果是横滑，禁止默认的垂直滚动
                 if (isHorizontalSwipe) {
                     if (e.cancelable) e.preventDefault();
                 }
             };
 
             const handleListTouchEnd = (e) => {
-                if (!isHorizontalSwipe) return; // 如果不是横向滑动，不切换
+                if (!isHorizontalSwipe) return; 
                 
                 const dx = e.changedTouches[0].clientX - listStartX;
-                if (Math.abs(dx) > 50) { // 滑动超过 50px 才切换
+                if (Math.abs(dx) > 50) { 
                     const currentIndex = filtersList.indexOf(currentFilter.value);
-                    if (dx > 0 && currentIndex > 0) currentFilter.value = filtersList[currentIndex - 1]; // 右滑
-                    else if (dx < 0 && currentIndex < filtersList.length - 1) currentFilter.value = filtersList[currentIndex + 1]; // 左滑
+                    if (dx > 0 && currentIndex > 0) currentFilter.value = filtersList[currentIndex - 1]; 
+                    else if (dx < 0 && currentIndex < filtersList.length - 1) currentFilter.value = filtersList[currentIndex + 1]; 
                 }
             };
 
-            // --- 详情页物理手势 ---
             const handleModalTouchStart = (e) => {
                 if (modalContentRef.value && modalContentRef.value.scrollTop > 0) return;
                 isDragging.value = true;
@@ -407,7 +416,7 @@
 
             const handleModalTouchEnd = (e) => {
                 isDragging.value = false;
-                if (dragOffset.value > 150) closeDetail();
+                if (dragOffset.value > 120) closeDetail();
                 else dragOffset.value = 0;
             };
 
@@ -507,7 +516,7 @@
                 booths, activeBooth, isEditing, isMenuOpen, form, currentFilter, filters, filteredBooths, globalSettings, placeholderImg, importInput,
                 modalContentRef, dragOffset, isDragging,
                 handleModalTouchStart, handleModalTouchMove, handleModalTouchEnd, 
-                handleListTouchStart, handleListTouchMove, handleListTouchEnd, // 新增手势
+                handleListTouchStart, handleListTouchMove, handleListTouchEnd, 
                 triggerMapUpload, handleMapUpload, handleCoverUpload, openAddModal, editBooth, setMapPoint, saveForm,
                 viewBooth, closeDetail, updateStatus, deleteCurrentBooth, getStatusText,
                 exportData, triggerImport, handleImport
