@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>漫展扫货战术终端</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* 自定义字体和细节优化 */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
+        .aspect-card { aspect-ratio: 3/4; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 状态标记的颜色定义 */
+        .status-pending { border-left: 4px solid #9ca3af; }
+        .status-bought { border-left: 4px solid #10b981; }
+        .status-soldout { border-left: 4px solid #ef4444; opacity: 0.6; filter: grayscale(80%); }
+        .status-visited { border-left: 4px solid #3b82f6; }
+
+        /* 动画 */
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        .slide-up-enter-active, .slide-up-leave-active { transition: transform 0.3s ease, opacity 0.3s ease; }
+        .slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); opacity: 0; }
+        
+        /* 地图上的点 */
+        .map-pin {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+            animation: bounce 0.5s infinite alternate;
+        }
+        @keyframes bounce { from { transform: translate(-50%, -100%); } to { transform: translate(-50%, -110%); } }
+    </style>
+</head>
+<body>
+
+<div id="app" class="max-w-md mx-auto h-screen flex flex-col bg-gray-50 overflow-hidden relative shadow-2xl">
+
+    <header class="bg-white px-4 py-3 shadow-sm z-10 flex justify-between items-center sticky top-0">
+        <div class="font-bold text-lg text-gray-800 flex items-center gap-2">
+            <i class="fa-solid fa-map-location-dot text-pink-500"></i>
+            <span>漫展战术终端</span>
+        </div>
+        <div class="flex gap-3">
+            <button @click="triggerMapUpload" class="text-sm text-gray-500 hover:text-pink-500">
+                <i class="fa-regular fa-image"></i> {{ globalSettings.mapImage ? '换地图' : '设地图' }}
+            </button>
+            <button @click="openAddModal" class="bg-pink-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-lg active:scale-95 transition">
+                <i class="fa-solid fa-plus"></i> 记摊位
+            </button>
+        </div>
+        <input type="file" ref="mapInput" class="hidden" accept="image/*" @change="handleMapUpload">
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-3 hide-scrollbar">
+        <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
+            <button v-for="tab in filters" :key="tab.key" 
+                @click="currentFilter = tab.key"
+                :class="currentFilter === tab.key ? 'bg-gray-800 text-white' : 'bg-white text-gray-500 border border-gray-200'"
+                class="px-3 py-1 rounded-full text-xs whitespace-nowrap transition-colors">
+                {{ tab.label }}
+            </button>
+        </div>
+
+        <div v-if="filteredBooths.length > 0" class="grid grid-cols-2 gap-3 pb-20">
+            <div v-for="booth in filteredBooths" :key="booth.id" @click="viewBooth(booth)"
+                class="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition active:scale-95 cursor-pointer relative group">
+                
+                <div class="aspect-card bg-gray-200 relative overflow-hidden">
+                    <img :src="booth.cover || placeholderImg" class="w-full h-full object-cover">
+                    <div v-if="booth.status === 'bought'" class="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded shadow">GET!</div>
+                    <div v-if="booth.status === 'soldout'" class="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold tracking-widest">售罄</div>
+                </div>
+
+                <div class="p-2.5" :class="'status-' + booth.status">
+                    <h3 class="font-bold text-gray-800 text-sm truncate">{{ booth.name }}</h3>
+                    <p class="text-xs text-gray-400 mt-1 truncate">{{ booth.goods || '暂无商品描述...' }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div v-else class="flex flex-col items-center justify-center h-64 text-gray-400">
+            <i class="fa-solid fa-box-open text-4xl mb-3"></i>
+            <p class="text-sm">暂无摊位，快去添加吧</p>
+        </div>
+    </main>
+
+    <transition name="slide-up">
+        <div v-if="activeBooth" class="absolute inset-0 z-20 bg-white flex flex-col h-full">
+            <div class="px-4 py-3 flex items-center justify-between border-b bg-white/90 backdrop-blur">
+                <button @click="closeDetail" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                    <i class="fa-solid fa-chevron-down text-gray-600"></i>
+                </button>
+                <div class="font-bold text-gray-800">{{ activeBooth.name }}</div>
+                <button @click="editBooth(activeBooth)" class="text-gray-400 text-sm">编辑</button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto hide-scrollbar">
+                <div class="relative bg-gray-100 w-full overflow-hidden group">
+                    <div v-if="!globalSettings.mapImage" class="h-48 flex items-center justify-center text-gray-400 text-sm">
+                        请先在首页右上角设置漫展地图
+                    </div>
+                    <div v-else class="relative w-full">
+                        <img :src="globalSettings.mapImage" class="w-full h-auto block opacity-90">
+                        <div v-if="activeBooth.x !== null" class="map-pin text-pink-600 text-3xl"
+                            :style="{ left: activeBooth.x + '%', top: activeBooth.y + '%' }">
+                            <i class="fa-solid fa-location-dot"></i>
+                        </div>
+                    </div>
+                    <div class="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded backdrop-blur">
+                        摊位位置示意
+                    </div>
+                </div>
+
+                <div class="p-5">
+                    <h2 class="text-xl font-bold mb-2 flex items-center gap-2">
+                        售卖情报
+                        <span class="text-xs font-normal text-white px-2 py-0.5 rounded" 
+                              :class="getStatusColor(activeBooth.status)">
+                            {{ getStatusText(activeBooth.status) }}
+                        </span>
+                    </h2>
+                    <div class="text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 p-4 rounded-xl text-sm min-h-[100px]">
+                        {{ activeBooth.goods || '博主很懒，没有记录具体商品...' }}
+                    </div>
+                    
+                    <div class="mt-6 flex gap-3 overflow-x-auto">
+                        <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-gray-200" v-if="activeBooth.cover">
+                            <img :src="activeBooth.cover" class="w-full h-full object-cover">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t bg-white safe-area-pb grid grid-cols-4 gap-2">
+                <button @click="updateStatus('bought')" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-green-50 text-green-600">
+                    <i class="fa-solid fa-check-circle text-xl"></i>
+                    <span class="text-xs">已买到</span>
+                </button>
+                <button @click="updateStatus('soldout')" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-red-50 text-red-500">
+                    <i class="fa-solid fa-ban text-xl"></i>
+                    <span class="text-xs">售罄</span>
+                </button>
+                <button @click="updateStatus('visited')" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-blue-50 text-blue-500">
+                    <i class="fa-solid fa-eye text-xl"></i>
+                    <span class="text-xs">看过了</span>
+                </button>
+                <button @click="deleteCurrentBooth" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-gray-100 text-gray-400 border-l ml-2">
+                    <i class="fa-solid fa-trash text-xl"></i>
+                    <span class="text-xs">删除</span>
+                </button>
+            </div>
+        </div>
+    </transition>
+
+    <transition name="fade">
+        <div v-if="isEditing" class="absolute inset-0 z-30 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="px-4 py-3 border-b font-bold text-center">
+                    {{ form.id ? '编辑摊位' : '新摊位' }}
+                </div>
+                
+                <div class="p-4 overflow-y-auto flex-1">
+                    <div @click="$refs.coverInput.click()" class="w-full aspect-video bg-gray-100 rounded-lg mb-4 flex items-center justify-center cursor-pointer border-2 border-dashed border-gray-300 hover:border-pink-400 relative overflow-hidden group">
+                        <img v-if="form.cover" :src="form.cover" class="w-full h-full object-cover">
+                        <div v-else class="text-gray-400 flex flex-col items-center">
+                            <i class="fa-solid fa-camera text-2xl mb-1"></i>
+                            <span class="text-xs">点击添加封面</span>
+                        </div>
+                        <div class="absolute inset-0 bg-black/30 hidden group-hover:flex items-center justify-center text-white text-sm">更换图片</div>
+                    </div>
+                    <input type="file" ref="coverInput" class="hidden" accept="image/*" @change="handleCoverUpload">
+
+                    <input v-model="form.name" type="text" placeholder="摊位名称 (如: A-12 也就是G)" class="w-full p-3 bg-gray-50 rounded-lg mb-3 border-none focus:ring-2 focus:ring-pink-200 outline-none">
+                    
+                    <textarea v-model="form.goods" placeholder="想要买的商品清单..." rows="3" class="w-full p-3 bg-gray-50 rounded-lg mb-3 border-none focus:ring-2 focus:ring-pink-200 outline-none resize-none"></textarea>
+
+                    <div class="mb-2">
+                        <label class="text-xs text-gray-500 mb-1 block">点击地图标记位置:</label>
+                        <div v-if="!globalSettings.mapImage" class="text-red-400 text-xs">请先在首页上传漫展地图</div>
+                        <div v-else class="relative w-full rounded-lg overflow-hidden border border-gray-200" @click="setMapPoint">
+                            <img :src="globalSettings.mapImage" class="w-full block">
+                            <div v-if="form.x !== null" class="absolute w-4 h-4 bg-pink-500 rounded-full border-2 border-white shadow transform -translate-x-1/2 -translate-y-1/2"
+                                :style="{ left: form.x + '%', top: form.y + '%' }"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4 border-t flex gap-3">
+                    <button @click="isEditing = false" class="flex-1 py-2 rounded-lg text-gray-500 hover:bg-gray-100">取消</button>
+                    <button @click="saveForm" class="flex-1 py-2 bg-pink-500 text-white rounded-lg font-bold shadow-md active:scale-95">保存</button>
+                </div>
+            </div>
+        </div>
+    </transition>
+
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, reactive } = Vue;
+
+    // --- IndexedDB 简单封装 (解决 LocalStorage 存不下图片的问题) ---
+    const DB_NAME = 'ComicConDB';
+    const DB_VERSION = 1;
+    
+    const dbUtils = {
+        db: null,
+        async init() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('booths')) db.createObjectStore('booths', { keyPath: 'id' });
+                    if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+                };
+                request.onsuccess = (e) => {
+                    this.db = e.target.result;
+                    resolve();
+                };
+                request.onerror = (e) => reject(e);
+            });
+        },
+        async getAllBooths() {
+            return new Promise(resolve => {
+                const tx = this.db.transaction('booths', 'readonly');
+                const store = tx.objectStore('booths');
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result || []);
+            });
+        },
+        async saveBooth(booth) {
+            return new Promise(resolve => {
+                const tx = this.db.transaction('booths', 'readwrite');
+                tx.objectStore('booths').put(JSON.parse(JSON.stringify(booth)));
+                tx.oncomplete = () => resolve();
+            });
+        },
+        async deleteBooth(id) {
+            return new Promise(resolve => {
+                const tx = this.db.transaction('booths', 'readwrite');
+                tx.objectStore('booths').delete(id);
+                tx.oncomplete = () => resolve();
+            });
+        },
+        async getSetting(key) {
+            return new Promise(resolve => {
+                const tx = this.db.transaction('settings', 'readonly');
+                const req = tx.objectStore('settings').get(key);
+                req.onsuccess = () => resolve(req.result ? req.result.value : null);
+            });
+        },
+        async saveSetting(key, value) {
+            return new Promise(resolve => {
+                const tx = this.db.transaction('settings', 'readwrite');
+                tx.objectStore('settings').put({ key, value });
+                tx.oncomplete = () => resolve();
+            });
+        }
+    };
+
+    createApp({
+        setup() {
+            // 数据状态
+            const booths = ref([]);
+            const activeBooth = ref(null);
+            const isEditing = ref(false);
+            const currentFilter = ref('all');
+            const globalSettings = reactive({ mapImage: null });
+            const placeholderImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f3f4f6'/%3E%3Ctext x='50' y='50' font-family='Arial' font-size='12' fill='%239ca3af' text-anchor='middle' dy='.3em'%3E无封面%3C/text%3E%3C/svg%3E";
+
+            // 表单数据
+            const form = reactive({
+                id: null, name: '', goods: '', cover: null, x: null, y: null, status: 'pending'
+            });
+
+            const filters = [
+                { key: 'all', label: '全部' },
+                { key: 'pending', label: '待逛' },
+                { key: 'bought', label: '已买' },
+                { key: 'soldout', label: '售罄' }
+            ];
+
+            // 计算属性：筛选
+            const filteredBooths = computed(() => {
+                if (currentFilter.value === 'all') return booths.value;
+                return booths.value.filter(b => b.status === currentFilter.value);
+            });
+
+            // 初始化
+            onMounted(async () => {
+                await dbUtils.init();
+                booths.value = await dbUtils.getAllBooths();
+                globalSettings.mapImage = await dbUtils.getSetting('mapImage');
+            });
+
+            // --- 方法 ---
+
+            // 1. 地图上传逻辑
+            const triggerMapUpload = () => document.querySelector('input[type=file]').click();
+            const handleMapUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const base64 = await fileToBase64(file);
+                globalSettings.mapImage = base64;
+                await dbUtils.saveSetting('mapImage', base64);
+                alert('地图设置成功！');
+            };
+
+            // 2. 摊位封面上传
+            const handleCoverUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                // 简单压缩一下防止太大（这里为了演示直接转）
+                form.cover = await fileToBase64(file);
+            };
+
+            // 3. 辅助函数：文件转Base64
+            const fileToBase64 = (file) => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                });
+            };
+
+            // 4. 打开弹窗
+            const openAddModal = () => {
+                Object.assign(form, { id: null, name: '', goods: '', cover: null, x: null, y: null, status: 'pending' });
+                isEditing.value = true;
+            };
+
+            const editBooth = (booth) => {
+                Object.assign(form, JSON.parse(JSON.stringify(booth)));
+                isEditing.value = true;
+                activeBooth.value = null; // 关闭详情页
+            };
+
+            // 5. 地图打点 (核心功能)
+            const setMapPoint = (e) => {
+                const rect = e.target.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                // 计算百分比坐标，适配不同屏幕
+                form.x = (x / rect.width) * 100;
+                form.y = (y / rect.height) * 100;
+            };
+
+            // 6. 保存逻辑
+            const saveForm = async () => {
+                if (!form.name) return alert('请填写摊位名称');
+                
+                const newBooth = {
+                    ...form,
+                    id: form.id || Date.now() // 新增则生成ID
+                };
+
+                // 更新前端列表
+                const index = booths.value.findIndex(b => b.id === newBooth.id);
+                if (index > -1) {
+                    booths.value[index] = newBooth;
+                } else {
+                    booths.value.unshift(newBooth);
+                }
+
+                // 存入 IndexedDB
+                await dbUtils.saveBooth(newBooth);
+                isEditing.value = false;
+            };
+
+            // 7. 查看详情
+            const viewBooth = (booth) => {
+                activeBooth.value = booth;
+            };
+
+            const closeDetail = () => {
+                activeBooth.value = null;
+            };
+
+            // 8. 状态更新
+            const updateStatus = async (status) => {
+                if (!activeBooth.value) return;
+                activeBooth.value.status = status;
+                // 同步更新列表里的数据
+                const index = booths.value.findIndex(b => b.id === activeBooth.value.id);
+                if (index > -1) booths.value[index].status = status;
+                
+                await dbUtils.saveBooth(activeBooth.value);
+                // 只有删除需要关闭详情，改状态不需要
+                if (status === 'visited') closeDetail(); 
+            };
+
+            const deleteCurrentBooth = async () => {
+                if (!confirm('确定删除这个摊位吗？')) return;
+                const id = activeBooth.value.id;
+                await dbUtils.deleteBooth(id);
+                booths.value = booths.value.filter(b => b.id !== id);
+                closeDetail();
+            };
+
+            // UI 辅助
+            const getStatusText = (s) => {
+                const map = { pending: '待逛', bought: '已买到', soldout: '已售罄', visited: '已看过' };
+                return map[s];
+            };
+            const getStatusColor = (s) => {
+                const map = { pending: 'bg-gray-400', bought: 'bg-green-500', soldout: 'bg-red-500', visited: 'bg-blue-500' };
+                return map[s];
+            };
+
+            return {
+                booths, activeBooth, isEditing, form, currentFilter, filters, filteredBooths, globalSettings, placeholderImg,
+                triggerMapUpload, handleMapUpload, handleCoverUpload, openAddModal, editBooth, setMapPoint, saveForm,
+                viewBooth, closeDetail, updateStatus, deleteCurrentBooth, getStatusText, getStatusColor
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
