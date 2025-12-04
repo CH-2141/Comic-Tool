@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>漫展战术终端</title>
+    <title>漫展战术终端 Ultimate</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -24,23 +24,21 @@
     </script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
         .aspect-card { aspect-ratio: 3/4; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* 状态条样式 */
         .status-pending { border-left: 5px solid #94a3b8; }
         .status-bought { border-left: 5px solid #06b6d4; }
         .status-soldout { border-left: 5px solid #ef4444; opacity: 0.7; filter: grayscale(100%); }
         .status-visited { border-left: 5px solid #8b5cf6; }
 
-        /* 详情页基础动画 */
-        .slide-up-enter-active { transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
-        .slide-up-leave-active { transition: transform 0.2s ease-in; }
+        /* 详情页动画 - 移除复杂属性，提升帧率 */
+        .slide-up-enter-active { transition: transform 0.3s cubic-bezier(0.19, 1, 0.22, 1); }
+        .slide-up-leave-active { transition: transform 0.25s ease-in; }
         .slide-up-enter-from, .slide-up-leave-to { transform: translate3d(0, 100%, 0); }
 
-        /* 菜单动画 */
         .menu-pop-enter-active, .menu-pop-leave-active { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .menu-pop-enter-from, .menu-pop-leave-to { opacity: 0; transform: translateY(10px) scale(0.95); }
 
@@ -81,13 +79,11 @@
         <div v-if="filteredBooths.length > 0" class="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 items-start min-h-[50vh]">
             <div v-for="booth in filteredBooths" :key="booth.id" @click="viewBooth(booth)"
                 class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 active:scale-95 cursor-pointer relative group border border-gray-50 flex flex-col">
-                
                 <div class="aspect-card bg-gray-100 relative overflow-hidden shrink-0">
                     <img :src="booth.cover || placeholderImg" class="w-full h-full object-cover transition duration-700 group-hover:scale-110">
                     <div v-if="booth.status === 'bought'" class="absolute top-2 right-2 bg-cyan-primary text-white text-xs px-2 py-1 rounded-md shadow-md font-bold">GET!</div>
                     <div v-if="booth.status === 'soldout'" class="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-bold tracking-[0.2em] backdrop-blur-[2px]">SOLD OUT</div>
                 </div>
-
                 <div class="p-3" :class="'status-' + booth.status">
                     <h3 class="font-bold text-gray-800 text-sm truncate">{{ booth.name }}</h3>
                     <p class="text-xs text-gray-400 mt-1 truncate">{{ booth.goods || '暂无商品描述...' }}</p>
@@ -138,10 +134,10 @@
     <transition name="slide-up">
         <div v-if="activeBooth" class="fixed inset-0 z-40 flex flex-col justify-end sm:justify-center sm:items-center">
             
-            <div @click="closeDetail" class="absolute inset-0 bg-black/40 transition-opacity"></div>
+            <div @click="closeDetail" class="absolute inset-0 bg-black/30 transition-opacity"></div>
             
             <div class="bg-white w-full h-[92vh] sm:h-[85vh] sm:w-[500px] sm:rounded-3xl rounded-t-3xl shadow-2xl relative flex flex-col overflow-hidden z-50 will-change-transform"
-                 :style="{ transform: `translate3d(0, ${dragOffset}px, 0)`, transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }"
+                 :style="{ transform: `translate3d(0, ${dragOffset}px, 0)`, transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.19, 1, 0.22, 1)' }"
                  @touchstart="handleModalTouchStart" 
                  @touchmove="handleModalTouchMove" 
                  @touchend="handleModalTouchEnd">
@@ -355,7 +351,7 @@
                 globalSettings.mapImage = await dbUtils.getSetting('mapImage');
             });
 
-            // 修复2: 优化的手势锁
+            // 核心修复: 手势锁优化
             const handleListTouchStart = (e) => {
                 listStartX = e.touches[0].clientX;
                 listStartY = e.touches[0].clientY;
@@ -364,24 +360,22 @@
             };
             
             const handleListTouchMove = (e) => {
-                if (isLocked && !isHorizontalSwipe) return; // 已锁定为垂直，不再检测
+                if (isLocked && !isHorizontalSwipe) return; 
 
                 const dx = e.touches[0].clientX - listStartX;
                 const dy = e.touches[0].clientY - listStartY;
                 
-                // 首次移动检测：判定意图
+                // 更早的判定意图：只要横向移动稍微大于纵向，就锁死为横滑
                 if (!isLocked) {
-                    // 如果横向移动 > 纵向，判定为横滑
-                    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 5) {
+                    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 6) {
                         isHorizontalSwipe = true;
                         isLocked = true;
-                    } else if (Math.abs(dy) > 5) {
+                    } else if (Math.abs(dy) > 6) {
                         isHorizontalSwipe = false;
                         isLocked = true;
                     }
                 }
                 
-                // 如果是横滑，禁止默认的垂直滚动
                 if (isHorizontalSwipe) {
                     if (e.cancelable) e.preventDefault();
                 }
@@ -416,8 +410,42 @@
 
             const handleModalTouchEnd = (e) => {
                 isDragging.value = false;
-                if (dragOffset.value > 120) closeDetail();
+                if (dragOffset.value > 100) closeDetail();
                 else dragOffset.value = 0;
+            };
+
+            // 核心修复: 图片压缩引擎 (解决卡顿的关键)
+            // 将上传的图片压缩到最大宽/高 1024px，质量 0.7
+            const compressImage = (file) => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            let width = img.width;
+                            let height = img.height;
+                            const maxSize = 1024; // 压缩阈值
+
+                            if (width > height && width > maxSize) {
+                                height *= maxSize / width;
+                                width = maxSize;
+                            } else if (height > maxSize) {
+                                width *= maxSize / height;
+                                height = maxSize;
+                            }
+
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            // 压缩为 jpeg，质量 0.7
+                            resolve(canvas.toDataURL('image/jpeg', 0.7));
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
             };
 
             const exportData = async () => {
@@ -460,16 +488,15 @@
             const handleMapUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                const base64 = await fileToBase64(file);
+                const base64 = await compressImage(file); // 使用压缩
                 globalSettings.mapImage = base64;
                 await dbUtils.saveSetting('mapImage', base64);
             };
             const handleCoverUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                form.cover = await fileToBase64(file);
+                form.cover = await compressImage(file); // 使用压缩
             };
-            const fileToBase64 = (file) => new Promise((r) => { const reader = new FileReader(); reader.onload = (e) => r(e.target.result); reader.readAsDataURL(file); });
             
             const openAddModal = () => { Object.assign(form, { id: null, name: '', goods: '', cover: null, x: null, y: null, status: 'pending' }); isEditing.value = true; };
             const editBooth = (booth) => { Object.assign(form, JSON.parse(JSON.stringify(booth))); isEditing.value = true; activeBooth.value = null; };
