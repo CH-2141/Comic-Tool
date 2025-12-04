@@ -43,29 +43,39 @@
             <span class="hidden sm:inline">漫展战术终端</span>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 relative">
             
-            <div class="flex bg-gray-100 rounded-lg p-1">
-                <button @click="exportData" class="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1 flex items-center justify-center text-gray-600 hover:text-pink-500 hover:bg-white rounded transition" title="导出分享">
-                    <i class="fa-solid fa-file-export"></i>
-                    <span class="hidden sm:inline ml-1 text-xs">分享</span>
-                </button>
-                <div class="w-[1px] bg-gray-300 my-1 mx-0.5"></div>
-                <button @click="triggerImport" class="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1 flex items-center justify-center text-gray-600 hover:text-pink-500 hover:bg-white rounded transition" title="导入配置">
-                    <i class="fa-solid fa-file-import"></i>
-                    <span class="hidden sm:inline ml-1 text-xs">导入</span>
-                </button>
-            </div>
-
-            <button @click="triggerMapUpload" class="w-8 h-8 sm:w-auto sm:px-2 flex items-center justify-center text-gray-500 hover:text-pink-500 rounded-full hover:bg-gray-100 transition" title="设置地图">
-                <i class="fa-regular fa-image text-lg"></i>
-                <span class="hidden sm:inline ml-1 text-sm">{{ globalSettings.mapImage ? '换图' : '设图' }}</span>
-            </button>
-
-            <button @click="openAddModal" class="bg-pink-500 text-white h-8 px-3 rounded-full text-sm font-medium shadow-lg active:scale-95 transition flex items-center gap-1 whitespace-nowrap">
+            <button @click="openAddModal" class="bg-pink-500 text-white h-9 px-4 rounded-full text-sm font-bold shadow-md active:scale-95 transition flex items-center gap-1 whitespace-nowrap">
                 <i class="fa-solid fa-plus"></i> 
                 <span>记摊位</span>
             </button>
+
+            <button @click="isMenuOpen = !isMenuOpen" class="w-9 h-9 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center hover:bg-gray-200 transition active:scale-95">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+
+            <transition name="fade">
+                <div v-if="isMenuOpen" class="absolute top-12 right-0 w-40 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 flex flex-col py-1">
+                    <div class="fixed inset-0 z-[-1]" @click="isMenuOpen = false"></div>
+                    
+                    <button @click="triggerMapUpload; isMenuOpen=false" class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-600 transition text-left">
+                        <i class="fa-regular fa-image w-4 text-center"></i>
+                        <span>{{ globalSettings.mapImage ? '更换地图' : '设置地图' }}</span>
+                    </button>
+                    
+                    <div class="h-[1px] bg-gray-100 mx-2"></div>
+
+                    <button @click="exportData; isMenuOpen=false" class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-600 transition text-left">
+                        <i class="fa-solid fa-file-export w-4 text-center"></i>
+                        <span>分享数据</span>
+                    </button>
+
+                    <button @click="triggerImport; isMenuOpen=false" class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-600 transition text-left">
+                        <i class="fa-solid fa-file-import w-4 text-center"></i>
+                        <span>导入数据</span>
+                    </button>
+                </div>
+            </transition>
         </div>
 
         <input type="file" ref="mapInput" class="hidden" accept="image/*" @change="handleMapUpload">
@@ -277,6 +287,7 @@
             const booths = ref([]);
             const activeBooth = ref(null);
             const isEditing = ref(false);
+            const isMenuOpen = ref(false); // 新增：控制菜单显示
             const currentFilter = ref('all');
             const globalSettings = reactive({ mapImage: null });
             const placeholderImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f3f4f6'/%3E%3Ctext x='50' y='50' font-family='Arial' font-size='12' fill='%239ca3af' text-anchor='middle' dy='.3em'%3E无封面%3C/text%3E%3C/svg%3E";
@@ -382,7 +393,7 @@
             const getStatusColor = (s) => ({ pending: 'bg-gray-400', bought: 'bg-green-500', soldout: 'bg-red-500', visited: 'bg-blue-500' }[s]);
 
             return {
-                booths, activeBooth, isEditing, form, currentFilter, filters, filteredBooths, globalSettings, placeholderImg, importInput,
+                booths, activeBooth, isEditing, isMenuOpen, form, currentFilter, filters, filteredBooths, globalSettings, placeholderImg, importInput,
                 triggerMapUpload, handleMapUpload, handleCoverUpload, openAddModal, editBooth, setMapPoint, saveForm,
                 viewBooth, closeDetail, updateStatus, deleteCurrentBooth, getStatusText, getStatusColor,
                 exportData, triggerImport, handleImport
