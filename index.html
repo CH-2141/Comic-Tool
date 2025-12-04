@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>漫展战术终端</title>
+    <title>漫展战术终端 Ultimate</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -34,8 +34,9 @@
         .status-soldout { border-left: 4px solid #ef4444; opacity: 0.6; filter: grayscale(80%); }
         .status-visited { border-left: 4px solid #8b5cf6; }
 
-        /* 详情页动画：从底部滑入滑出 */
-        .slide-up-enter-active, .slide-up-leave-active { transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        /* 详情页基础动画 (用于点击打开时) */
+        .slide-up-enter-active { transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        .slide-up-leave-active { transition: transform 0.2s ease-in; }
         .slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); }
 
         /* 菜单淡入上浮动画 */
@@ -63,7 +64,9 @@
         </div>
     </header>
 
-    <main class="flex-1 overflow-y-auto p-4 hide-scrollbar pb-40">
+    <main class="flex-1 overflow-y-auto p-4 hide-scrollbar pb-40 transition-transform duration-300"
+          @touchstart="handleListTouchStart" @touchend="handleListTouchEnd">
+        
         <div class="flex gap-2 mb-5 overflow-x-auto pb-2 justify-start sm:justify-center">
             <button v-for="tab in filters" :key="tab.key" @click="currentFilter = tab.key"
                 :class="currentFilter === tab.key ? 'bg-gray-800 text-white shadow-lg scale-105' : 'bg-white text-gray-500'"
@@ -72,7 +75,7 @@
             </button>
         </div>
 
-        <div v-if="filteredBooths.length > 0" class="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        <div v-if="filteredBooths.length > 0" class="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 min-h-[50vh]">
             <div v-for="booth in filteredBooths" :key="booth.id" @click="viewBooth(booth)"
                 class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 active:scale-95 cursor-pointer relative group border border-gray-50">
                 <div class="aspect-card bg-gray-100 relative overflow-hidden">
@@ -88,7 +91,7 @@
         </div>
         <div v-else class="flex flex-col items-center justify-center h-64 text-gray-300 mt-10">
             <i class="fa-solid fa-box-open text-6xl mb-4 text-gray-200"></i>
-            <p class="text-sm">点击右下角“+”开始记录</p>
+            <p class="text-sm">当前分类暂无数据<br><span class="text-xs opacity-50">左右滑动切换分类</span></p>
         </div>
     </main>
 
@@ -97,7 +100,6 @@
     </transition>
 
     <div class="fixed bottom-8 right-6 flex flex-col items-end gap-4 z-30">
-        
         <div class="flex flex-col gap-3 items-end">
             <transition-group name="menu-pop">
                 <template v-if="isMenuOpen">
@@ -117,27 +119,28 @@
             </transition-group>
         </div>
 
-        <button @click="isMenuOpen = !isMenuOpen" 
-            class="w-12 h-12 rounded-full bg-white text-gray-600 shadow-md flex items-center justify-center text-lg hover:bg-gray-50 transition active:scale-90 z-30 border border-gray-100">
+        <button @click="isMenuOpen = !isMenuOpen" class="w-12 h-12 rounded-full bg-white text-gray-600 shadow-md flex items-center justify-center text-lg hover:bg-gray-50 transition active:scale-90 z-30 border border-gray-100">
             <i class="fa-solid" :class="isMenuOpen ? 'fa-xmark' : 'fa-bars'"></i>
         </button>
 
-        <button @click="openAddModal" 
-            class="h-14 px-6 rounded-full bg-cyan-primary text-white shadow-float flex items-center gap-2 font-bold text-lg active:scale-95 transition z-30">
+        <button @click="openAddModal" class="h-14 px-6 rounded-full bg-cyan-primary text-white shadow-float flex items-center gap-2 font-bold text-lg active:scale-95 transition z-30">
             <i class="fa-solid fa-plus"></i> 
             <span>记摊位</span>
         </button>
     </div>
 
     <transition name="slide-up">
-        <div v-if="activeBooth" class="fixed inset-0 z-40 flex flex-col justify-end sm:justify-center sm:items-center"
-             @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd">
+        <div v-if="activeBooth" class="fixed inset-0 z-40 flex flex-col justify-end sm:justify-center sm:items-center">
             
             <div @click="closeDetail" class="absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity"></div>
             
-            <div class="bg-white w-full h-[92vh] sm:h-[85vh] sm:w-[500px] sm:rounded-3xl rounded-t-3xl shadow-2xl relative flex flex-col overflow-hidden z-50">
+            <div class="bg-white w-full h-[92vh] sm:h-[85vh] sm:w-[500px] sm:rounded-3xl rounded-t-3xl shadow-2xl relative flex flex-col overflow-hidden z-50 will-change-transform"
+                 :style="{ transform: `translateY(${dragOffset}px)`, transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }"
+                 @touchstart="handleModalTouchStart" 
+                 @touchmove="handleModalTouchMove" 
+                 @touchend="handleModalTouchEnd">
                 
-                <div class="w-full pt-4 pb-2 bg-white flex justify-center shrink-0">
+                <div class="w-full pt-4 pb-2 bg-white flex justify-center shrink-0 cursor-grab active:cursor-grabbing">
                     <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
                 </div>
 
@@ -149,7 +152,7 @@
                     </div>
                 </div>
 
-                <div class="flex-1 overflow-y-auto hide-scrollbar bg-white" ref="contentScroll">
+                <div class="flex-1 overflow-y-auto hide-scrollbar bg-white" ref="modalContentRef">
                     <div class="m-5 rounded-2xl overflow-hidden bg-gray-50 relative group shadow-inner border border-gray-100">
                         <div v-if="!globalSettings.mapImage" class="h-40 flex flex-col gap-2 items-center justify-center text-gray-400 text-sm">
                             <i class="fa-regular fa-map text-2xl"></i>
@@ -179,19 +182,19 @@
                 <div class="p-4 bg-white border-t border-gray-50">
                     <div class="grid grid-cols-4 gap-3">
                         <button @click.stop="updateStatus('bought')" 
-                            :class="activeBooth.status === 'bought' ? 'bg-cyan-primary text-white shadow-lg shadow-cyan-primary/30' : 'bg-cyan-50 text-cyan-600'"
+                            :class="activeBooth.status === 'bought' ? 'bg-cyan-primary text-white shadow-lg' : 'bg-cyan-50 text-cyan-600'"
                             class="flex flex-col items-center gap-1 py-2.5 rounded-2xl active:scale-95 transition duration-200">
                             <i class="fa-solid fa-check-circle text-xl"></i>
                             <span class="text-xs font-bold">买到了</span>
                         </button>
                         <button @click.stop="updateStatus('soldout')" 
-                            :class="activeBooth.status === 'soldout' ? 'bg-red-500 text-white shadow-lg shadow-red-500/30' : 'bg-red-50 text-red-500'"
+                            :class="activeBooth.status === 'soldout' ? 'bg-red-500 text-white shadow-lg' : 'bg-red-50 text-red-500'"
                             class="flex flex-col items-center gap-1 py-2.5 rounded-2xl active:scale-95 transition duration-200">
                             <i class="fa-solid fa-ban text-xl"></i>
                             <span class="text-xs font-bold">售罄</span>
                         </button>
                         <button @click.stop="updateStatus('visited')" 
-                             :class="activeBooth.status === 'visited' ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' : 'bg-purple-50 text-purple-500'"
+                             :class="activeBooth.status === 'visited' ? 'bg-purple-500 text-white shadow-lg' : 'bg-purple-50 text-purple-500'"
                              class="flex flex-col items-center gap-1 py-2.5 rounded-2xl active:scale-95 transition duration-200">
                             <i class="fa-solid fa-eye text-xl"></i>
                             <span class="text-xs font-bold">看过了</span>
@@ -315,12 +318,26 @@
             const globalSettings = reactive({ mapImage: null });
             const placeholderImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f1f5f9'/%3E%3Ctext x='50' y='50' font-family='Arial' font-size='12' fill='%23cbd5e1' text-anchor='middle' dy='.3em'%3ENO IMG%3C/text%3E%3C/svg%3E";
             const form = reactive({ id: null, name: '', goods: '', cover: null, x: null, y: null, status: 'pending' });
-            const filters = [{ key: 'all', label: '全部' }, { key: 'pending', label: '待逛' }, { key: 'bought', label: '已买' }, { key: 'soldout', label: '售罄' }];
-            const importInput = ref(null);
             
-            // 智能手势相关
+            // Tab 切换逻辑
+            const filtersList = ['all', 'pending', 'bought', 'soldout'];
+            const filters = [
+                { key: 'all', label: '全部' }, 
+                { key: 'pending', label: '待逛' }, 
+                { key: 'bought', label: '已买' }, 
+                { key: 'soldout', label: '售罄' }
+            ];
+            
+            // 手势与动画状态
+            const importInput = ref(null);
+            const modalContentRef = ref(null);
+            const dragOffset = ref(0);
+            const isDragging = ref(false);
             const touchStartY = ref(0);
-            const contentScroll = ref(null);
+            
+            // 列表左右滑手势变量
+            let listStartX = 0;
+            let listStartY = 0;
 
             const filteredBooths = computed(() => {
                 if (currentFilter.value === 'all') return booths.value;
@@ -333,28 +350,63 @@
                 globalSettings.mapImage = await dbUtils.getSetting('mapImage');
             });
 
-            // 智能下拉关闭逻辑
-            const handleTouchStart = (e) => {
-                touchStartY.value = e.touches[0].clientY;
+            // --- 列表左右滑动切换 Tab ---
+            const handleListTouchStart = (e) => {
+                listStartX = e.touches[0].clientX;
+                listStartY = e.touches[0].clientY;
             };
-            const handleTouchMove = (e) => {
-                // 如果内容没有滚到顶端，不要触发下拉关闭，保证正常滚动
-                if (contentScroll.value && contentScroll.value.scrollTop > 0) return;
+            const handleListTouchEnd = (e) => {
+                const dx = e.changedTouches[0].clientX - listStartX;
+                const dy = e.changedTouches[0].clientY - listStartY;
                 
-                const currentY = e.touches[0].clientY;
-                // 阻尼感：如果在顶部向下拉，阻止默认行为（防止整个网页回弹）
-                if (currentY > touchStartY.value) {
-                    // e.preventDefault(); // 可选：取决于浏览器兼容性
+                // 判断是否为水平滑动 (水平位移 > 垂直位移 且 位移大于 50px)
+                if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+                    const currentIndex = filtersList.indexOf(currentFilter.value);
+                    // 右滑 -> 上一个
+                    if (dx > 0 && currentIndex > 0) {
+                        currentFilter.value = filtersList[currentIndex - 1];
+                    }
+                    // 左滑 -> 下一个
+                    else if (dx < 0 && currentIndex < filtersList.length - 1) {
+                        currentFilter.value = filtersList[currentIndex + 1];
+                    }
                 }
             };
-            const handleTouchEnd = (e) => {
-                // 必须在顶部才能触发关闭
-                if (contentScroll.value && contentScroll.value.scrollTop > 0) return;
 
-                const distance = e.changedTouches[0].clientY - touchStartY.value;
-                // 下滑阈值 80px
-                if (distance > 80) {
+            // --- 弹窗物理回弹手势 (核心优化) ---
+            const handleModalTouchStart = (e) => {
+                // 如果内部还有滚动条且没滚到顶，则不触发整个卡片拖拽
+                if (modalContentRef.value && modalContentRef.value.scrollTop > 0) return;
+                
+                isDragging.value = true;
+                touchStartY.value = e.touches[0].clientY;
+            };
+
+            const handleModalTouchMove = (e) => {
+                if (!isDragging.value) return;
+                
+                const currentY = e.touches[0].clientY;
+                const delta = currentY - touchStartY.value;
+
+                // 只有向下拉才计算偏移 (delta > 0)
+                if (delta > 0) {
+                    // 阻尼效果：随着下拉距离增加，拖动变得困难
+                    dragOffset.value = delta; // 简单线性跟随，如果想要阻尼可以用 delta * 0.5
+                    
+                    // 阻止默认事件防止整个网页橡皮筋效果(视浏览器支持)
+                    if(e.cancelable) e.preventDefault();
+                }
+            };
+
+            const handleModalTouchEnd = (e) => {
+                isDragging.value = false;
+                
+                // 阈值判断：如果下拉超过 150px，则关闭
+                if (dragOffset.value > 150) {
                     closeDetail();
+                } else {
+                    // 否则回弹
+                    dragOffset.value = 0;
                 }
             };
 
@@ -425,18 +477,22 @@
                 isEditing.value = false;
             };
             
-            const viewBooth = (b) => activeBooth.value = b;
-            const closeDetail = () => activeBooth.value = null; 
+            const viewBooth = (b) => {
+                activeBooth.value = b;
+                dragOffset.value = 0; // 重置拖拽距离
+            };
+            const closeDetail = () => {
+                activeBooth.value = null;
+                dragOffset.value = 0; 
+            };
             
-            // 更新状态并自动关闭
             const updateStatus = async (status) => {
                 if (!activeBooth.value) return;
                 activeBooth.value.status = status;
                 const index = booths.value.findIndex(b => b.id === activeBooth.value.id);
                 if (index > -1) booths.value[index].status = status;
                 await dbUtils.saveBooth(activeBooth.value);
-                // 核心修改：任何状态更新都触发关闭，返回主页
-                closeDetail();
+                closeDetail(); // 自动关闭
             };
             const deleteCurrentBooth = async () => {
                 if (!confirm('确定删除?')) return;
@@ -448,7 +504,8 @@
 
             return {
                 booths, activeBooth, isEditing, isMenuOpen, form, currentFilter, filters, filteredBooths, globalSettings, placeholderImg, importInput,
-                contentScroll, handleTouchStart, handleTouchMove, handleTouchEnd, // 手势相关
+                modalContentRef, dragOffset, isDragging, // 导出新变量
+                handleModalTouchStart, handleModalTouchMove, handleModalTouchEnd, handleListTouchStart, handleListTouchEnd,
                 triggerMapUpload, handleMapUpload, handleCoverUpload, openAddModal, editBooth, setMapPoint, saveForm,
                 viewBooth, closeDetail, updateStatus, deleteCurrentBooth, getStatusText,
                 exportData, triggerImport, handleImport
