@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>漫展扫货战术终端 Ultimate</title>
+    <title>漫展扫货战术终端 Ultimate Pro</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -14,6 +14,9 @@
                         'cyan-primary': '#06b6d4', /* 亮蓝绿色 */
                         'cyan-hover': '#0891b2',
                         'cyan-light': '#ecfeff',
+                    },
+                    boxShadow: {
+                        'float': '0 10px 40px -10px rgba(0,0,0,0.2)',
                     }
                 }
             }
@@ -21,32 +24,41 @@
     </script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
         .aspect-card { aspect-ratio: 3/4; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* 状态条颜色 */
         .status-pending { border-left: 4px solid #94a3b8; }
-        .status-bought { border-left: 4px solid #06b6d4; } /* 蓝绿色 */
+        .status-bought { border-left: 4px solid #06b6d4; }
         .status-soldout { border-left: 4px solid #ef4444; opacity: 0.6; filter: grayscale(80%); }
         .status-visited { border-left: 4px solid #8b5cf6; }
 
-        /* 核心动画：详情页底部滑入滑出 */
-        /* 进入和离开的动画过程时间 */
-        .slide-up-enter-active, .slide-up-leave-active { 
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
-        }
-        /* 进入前 和 离开后 的状态 (都在屏幕下方) */
-        .slide-up-enter-from, .slide-up-leave-to { 
-            transform: translateY(100%); 
+        /* 详情页滑入滑出动画 */
+        .slide-up-enter-active, .slide-up-leave-active { transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); }
+
+        /* 菜单气泡弹出动画 (带3D倾斜) */
+        .menu-tilt-enter-active { animation: tilt-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .menu-tilt-leave-active { transition: opacity 0.2s; opacity: 0; }
+
+        @keyframes tilt-in {
+            0% { opacity: 0; transform: translateY(20px) scale(0.9) rotateX(-10deg); }
+            100% { opacity: 1; transform: translateY(0) scale(1) rotateX(0); }
         }
 
-        /* 菜单气泡弹出动画 */
-        .pop-enter-active, .pop-leave-active { transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        .pop-enter-from, .pop-leave-to { opacity: 0; transform: translateY(20px) scale(0.8); }
+        /* 3D 悬浮菜单样式 */
+        .menu-3d-container {
+            perspective: 1000px;
+            transform-style: preserve-3d;
+        }
+        .menu-card {
+            transform: rotateX(5deg) rotateY(-5deg); /* 微妙的倾斜 */
+            box-shadow: -5px 10px 20px rgba(0,0,0,0.15);
+            transition: transform 0.2s;
+        }
+        .menu-card:active { transform: scale(0.98); }
 
-        /* 背景模糊渐变 */
         .fade-blur-enter-active, .fade-blur-leave-active { transition: opacity 0.3s ease; }
         .fade-blur-enter-from, .fade-blur-leave-to { opacity: 0; }
 
@@ -61,19 +73,20 @@
 </head>
 <body>
 
-<div id="app" class="w-full h-screen flex flex-col bg-slate-50 overflow-hidden relative shadow-2xl">
+<div id="app" class="w-full h-screen flex flex-col bg-slate-50 overflow-hidden relative">
 
-    <header class="bg-white/80 backdrop-blur-md px-5 py-4 shadow-sm z-10 flex justify-center items-center sticky top-0 shrink-0 border-b border-gray-100">
+    <header class="bg-white/80 backdrop-blur-md px-5 py-4 z-10 flex justify-center items-center sticky top-0 shrink-0 border-b border-gray-100/50">
         <div class="font-bold text-lg text-gray-800 flex items-center gap-2">
             <i class="fa-solid fa-map-location-dot text-cyan-primary text-xl"></i>
             <span class="tracking-wide">漫展战术终端</span>
         </div>
     </header>
 
-    <main class="flex-1 overflow-y-auto p-4 hide-scrollbar pb-32"> <div class="flex gap-2 mb-5 overflow-x-auto pb-2 justify-start sm:justify-center">
+    <main class="flex-1 overflow-y-auto p-4 hide-scrollbar pb-32">
+        <div class="flex gap-2 mb-5 overflow-x-auto pb-2 justify-start sm:justify-center">
             <button v-for="tab in filters" :key="tab.key" 
                 @click="currentFilter = tab.key"
-                :class="currentFilter === tab.key ? 'bg-gray-800 text-white shadow-lg scale-105' : 'bg-white text-gray-500 border border-gray-200'"
+                :class="currentFilter === tab.key ? 'bg-gray-800 text-white shadow-lg scale-105' : 'bg-white text-gray-500'"
                 class="px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-300">
                 {{ tab.label }}
             </button>
@@ -81,7 +94,7 @@
 
         <div v-if="filteredBooths.length > 0" class="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             <div v-for="booth in filteredBooths" :key="booth.id" @click="viewBooth(booth)"
-                class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 active:scale-95 cursor-pointer relative group border border-gray-100">
+                class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 active:scale-95 cursor-pointer relative group border border-gray-50">
                 
                 <div class="aspect-card bg-gray-100 relative overflow-hidden">
                     <img :src="booth.cover || placeholderImg" class="w-full h-full object-cover transition duration-700 group-hover:scale-110">
@@ -103,25 +116,24 @@
     </main>
 
     <transition name="fade-blur">
-        <div v-if="isMenuOpen" @click="isMenuOpen = false" class="fixed inset-0 bg-white/60 backdrop-blur-md z-20 transition-all"></div>
+        <div v-if="isMenuOpen" @click="isMenuOpen = false" class="fixed inset-0 bg-white/60 backdrop-blur-md z-20"></div>
     </transition>
 
-    <div class="fixed bottom-8 right-6 flex flex-col items-end gap-4 z-30">
-        
+    <div class="fixed bottom-8 right-6 flex flex-col items-end gap-4 z-30 menu-3d-container">
         <div class="flex flex-col gap-3 items-end mb-2">
-            <transition-group name="pop">
+            <transition-group name="menu-tilt">
                 <template v-if="isMenuOpen">
-                    <button key="import" @click="triggerImport; isMenuOpen=false" class="flex items-center gap-3 bg-white text-gray-700 px-4 py-2 rounded-xl shadow-lg hover:bg-cyan-light transition border border-gray-100">
-                        <span class="text-sm font-medium">导入数据</span>
-                        <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-500 flex items-center justify-center"><i class="fa-solid fa-file-import"></i></div>
+                    <button key="import" @click="triggerImport(); isMenuOpen=false" class="menu-card flex items-center gap-3 bg-white text-gray-700 px-4 py-3 rounded-2xl shadow-float hover:bg-cyan-light transition">
+                        <span class="text-sm font-bold text-gray-600">导入数据</span>
+                        <div class="w-8 h-8 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-sm"><i class="fa-solid fa-file-import"></i></div>
                     </button>
-                    <button key="export" @click="exportData; isMenuOpen=false" class="flex items-center gap-3 bg-white text-gray-700 px-4 py-2 rounded-xl shadow-lg hover:bg-cyan-light transition border border-gray-100">
-                        <span class="text-sm font-medium">分享/备份</span>
-                        <div class="w-10 h-10 rounded-full bg-cyan-100 text-cyan-primary flex items-center justify-center"><i class="fa-solid fa-share-nodes"></i></div>
+                    <button key="export" @click="exportData(); isMenuOpen=false" class="menu-card flex items-center gap-3 bg-white text-gray-700 px-4 py-3 rounded-2xl shadow-float hover:bg-cyan-light transition">
+                        <span class="text-sm font-bold text-gray-600">分享备份</span>
+                        <div class="w-8 h-8 rounded-full bg-cyan-50 text-cyan-primary flex items-center justify-center text-sm"><i class="fa-solid fa-share-nodes"></i></div>
                     </button>
-                    <button key="map" @click="triggerMapUpload; isMenuOpen=false" class="flex items-center gap-3 bg-white text-gray-700 px-4 py-2 rounded-xl shadow-lg hover:bg-cyan-light transition border border-gray-100">
-                        <span class="text-sm font-medium">{{ globalSettings.mapImage ? '更换地图' : '设置地图' }}</span>
-                        <div class="w-10 h-10 rounded-full bg-pink-100 text-pink-500 flex items-center justify-center"><i class="fa-regular fa-image"></i></div>
+                    <button key="map" @click="triggerMapUpload(); isMenuOpen=false" class="menu-card flex items-center gap-3 bg-white text-gray-700 px-4 py-3 rounded-2xl shadow-float hover:bg-cyan-light transition">
+                        <span class="text-sm font-bold text-gray-600">{{ globalSettings.mapImage ? '更换地图' : '设置地图' }}</span>
+                        <div class="w-8 h-8 rounded-full bg-pink-50 text-pink-500 flex items-center justify-center text-sm"><i class="fa-regular fa-image"></i></div>
                     </button>
                 </template>
             </transition-group>
@@ -129,12 +141,11 @@
 
         <div class="flex items-center gap-3">
             <button @click="isMenuOpen = !isMenuOpen" 
-                class="w-12 h-12 rounded-full bg-white text-gray-600 shadow-lg border border-gray-200 flex items-center justify-center text-xl hover:bg-gray-50 transition active:scale-90 z-30">
+                class="w-14 h-14 rounded-full bg-white text-gray-600 shadow-float flex items-center justify-center text-xl hover:bg-gray-50 transition active:scale-90 z-30">
                 <i class="fa-solid" :class="isMenuOpen ? 'fa-xmark' : 'fa-bars'"></i>
             </button>
-
             <button @click="openAddModal" 
-                class="h-14 px-6 rounded-full bg-cyan-primary text-white shadow-xl shadow-cyan-primary/30 flex items-center gap-2 font-bold text-lg active:scale-95 transition z-30">
+                class="h-14 px-6 rounded-full bg-cyan-primary text-white shadow-float shadow-cyan-primary/40 flex items-center gap-2 font-bold text-lg active:scale-95 transition z-30">
                 <i class="fa-solid fa-plus"></i> 
                 <span>记摊位</span>
             </button>
@@ -143,25 +154,25 @@
 
     <transition name="slide-up">
         <div v-if="activeBooth" class="fixed inset-0 z-40 flex flex-col justify-end sm:justify-center sm:items-center">
-            
             <div @click="closeDetail" class="absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity"></div>
             
-            <div class="bg-white w-full h-[92vh] sm:h-[85vh] sm:w-[500px] sm:rounded-2xl rounded-t-3xl shadow-2xl relative flex flex-col overflow-hidden z-50 transform transition-transform">
+            <div class="bg-white w-full h-[92vh] sm:h-[85vh] sm:w-[500px] sm:rounded-3xl rounded-t-3xl shadow-2xl relative flex flex-col overflow-hidden z-50">
                 
-                <div class="w-full flex justify-center pt-3 pb-1 bg-white" @click="closeDetail">
-                    <div class="w-12 h-1.5 bg-gray-200 rounded-full"></div>
+                <div class="w-full pt-4 pb-2 bg-white cursor-grab active:cursor-grabbing touch-none"
+                     @touchstart="handleTouchStart" @touchmove="handleTouchMove" @touchend="handleTouchEnd">
+                    <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto"></div>
                 </div>
 
                 <div class="px-6 py-2 flex items-center justify-between bg-white shrink-0">
                     <h2 class="text-xl font-bold text-gray-800 truncate pr-4">{{ activeBooth.name }}</h2>
                     <div class="flex gap-2">
-                         <button @click="editBooth(activeBooth)" class="w-8 h-8 rounded-full bg-gray-50 text-gray-400 hover:text-cyan-primary flex items-center justify-center"><i class="fa-solid fa-pen"></i></button>
-                         <button @click="closeDetail" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+                         <button @click="editBooth(activeBooth)" class="w-9 h-9 rounded-full bg-gray-50 text-gray-400 hover:text-cyan-primary flex items-center justify-center transition"><i class="fa-solid fa-pen"></i></button>
+                         <button @click="closeDetail" class="w-9 h-9 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center transition"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                 </div>
 
                 <div class="flex-1 overflow-y-auto hide-scrollbar bg-white">
-                    <div class="m-4 rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 relative group shadow-inner">
+                    <div class="m-5 rounded-2xl overflow-hidden bg-gray-50 relative group shadow-inner">
                         <div v-if="!globalSettings.mapImage" class="h-40 flex flex-col gap-2 items-center justify-center text-gray-400 text-sm">
                             <i class="fa-regular fa-map text-2xl"></i>
                             <span>请点击右下角菜单设置地图</span>
@@ -183,7 +194,6 @@
                         <div class="text-gray-600 leading-7 bg-slate-50 p-4 rounded-2xl text-[15px] whitespace-pre-wrap border border-slate-100">
                             {{ activeBooth.goods || '暂无详细描述...' }}
                         </div>
-                        
                         <div class="mt-6" v-if="activeBooth.cover">
                             <div class="w-24 h-24 rounded-2xl overflow-hidden shadow-sm border border-gray-100">
                                 <img :src="activeBooth.cover" class="w-full h-full object-cover">
@@ -194,21 +204,21 @@
 
                 <div class="p-4 bg-white border-t border-gray-50">
                     <div class="grid grid-cols-4 gap-3">
-                        <button @click="updateStatus('bought')" class="flex flex-col items-center gap-1 py-2 rounded-xl bg-cyan-50 text-cyan-600 active:scale-95 transition">
+                        <button @click="updateStatus('bought')" class="flex flex-col items-center gap-1 py-2 rounded-2xl bg-cyan-50 text-cyan-600 active:scale-95 transition">
                             <i class="fa-solid fa-check-circle text-xl"></i>
-                            <span class="text-xs font-medium">买到了</span>
+                            <span class="text-xs font-bold">买到了</span>
                         </button>
-                        <button @click="updateStatus('soldout')" class="flex flex-col items-center gap-1 py-2 rounded-xl bg-red-50 text-red-500 active:scale-95 transition">
+                        <button @click="updateStatus('soldout')" class="flex flex-col items-center gap-1 py-2 rounded-2xl bg-red-50 text-red-500 active:scale-95 transition">
                             <i class="fa-solid fa-ban text-xl"></i>
-                            <span class="text-xs font-medium">售罄</span>
+                            <span class="text-xs font-bold">售罄</span>
                         </button>
-                        <button @click="updateStatus('visited')" class="flex flex-col items-center gap-1 py-2 rounded-xl bg-purple-50 text-purple-500 active:scale-95 transition">
+                        <button @click="updateStatus('visited')" class="flex flex-col items-center gap-1 py-2 rounded-2xl bg-purple-50 text-purple-500 active:scale-95 transition">
                             <i class="fa-solid fa-eye text-xl"></i>
-                            <span class="text-xs font-medium">看过了</span>
+                            <span class="text-xs font-bold">看过了</span>
                         </button>
-                        <button @click="deleteCurrentBooth" class="flex flex-col items-center gap-1 py-2 rounded-xl text-gray-400 hover:bg-gray-100 active:scale-95 transition border border-gray-100">
+                        <button @click="deleteCurrentBooth" class="flex flex-col items-center gap-1 py-2 rounded-2xl text-gray-400 hover:bg-gray-100 active:scale-95 transition border border-gray-100">
                             <i class="fa-solid fa-trash text-xl"></i>
-                            <span class="text-xs font-medium">删除</span>
+                            <span class="text-xs font-bold">删除</span>
                         </button>
                     </div>
                 </div>
@@ -218,8 +228,8 @@
 
     <transition name="fade-blur">
         <div v-if="isEditing" class="fixed inset-0 z-50 bg-white/30 backdrop-blur-md flex items-center justify-center p-6">
-            <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden animate-[pop_0.3s_ease-out]">
-                <div class="px-5 py-4 border-b font-bold text-center text-lg text-gray-800">
+            <div class="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden animate-[pop_0.3s_ease-out]">
+                <div class="px-5 py-4 border-b border-gray-50 font-bold text-center text-lg text-gray-800">
                     {{ form.id ? '编辑摊位' : '记录新摊位' }}
                 </div>
                 
@@ -228,25 +238,24 @@
                         <img v-if="form.cover" :src="form.cover" class="w-full h-full object-cover">
                         <div v-else class="text-gray-400 flex flex-col items-center gap-2">
                             <div class="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center"><i class="fa-solid fa-camera text-cyan-primary"></i></div>
-                            <span class="text-xs font-medium">拍张封面 / 选图</span>
+                            <span class="text-xs font-medium">封面图</span>
                         </div>
                     </div>
                     <input type="file" ref="coverInput" class="hidden" accept="image/*" @change="handleCoverUpload">
 
                     <div class="space-y-3">
-                        <input v-model="form.name" type="text" placeholder="摊位号 / 名称 (例如 A-12)" class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none focus:ring-2 focus:ring-cyan-primary/20 outline-none text-gray-800 font-medium">
+                        <input v-model="form.name" type="text" placeholder="摊位号 / 名称 (例如 A-12)" class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none focus:ring-2 focus:ring-cyan-primary/20 outline-none text-gray-800 font-bold">
                         <textarea v-model="form.goods" placeholder="想买什么谷子？记下来..." rows="3" class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none focus:ring-2 focus:ring-cyan-primary/20 outline-none resize-none text-gray-800"></textarea>
                     </div>
 
                     <div class="mt-4">
-                        <label class="text-xs font-bold text-gray-400 mb-2 block uppercase tracking-wider">Location Marking</label>
-                        <div v-if="!globalSettings.mapImage" class="p-4 bg-red-50 text-red-400 text-xs rounded-xl text-center">请先在主页菜单设置地图</div>
+                        <label class="text-xs font-bold text-gray-400 mb-2 block uppercase tracking-wider">Map Point</label>
+                        <div v-if="!globalSettings.mapImage" class="p-4 bg-red-50 text-red-400 text-xs rounded-xl text-center">请先设置地图</div>
                         <div v-else class="relative w-full rounded-xl overflow-hidden border border-gray-200 shadow-sm" @click="setMapPoint">
                             <img :src="globalSettings.mapImage" class="w-full block">
                             <div v-if="form.x !== null" class="absolute w-5 h-5 bg-cyan-primary rounded-full border-[3px] border-white shadow-lg transform -translate-x-1/2 -translate-y-1/2"
                                 :style="{ left: form.x + '%', top: form.y + '%' }"></div>
                         </div>
-                        <p class="text-[10px] text-gray-400 mt-1 text-center">在图上点一下标记位置</p>
                     </div>
                 </div>
 
@@ -333,6 +342,10 @@
             const filters = [{ key: 'all', label: '全部' }, { key: 'pending', label: '待逛' }, { key: 'bought', label: '已买' }, { key: 'soldout', label: '售罄' }];
             const importInput = ref(null);
 
+            // 触摸手势相关变量
+            const touchStartY = ref(0);
+            const touchCurrentY = ref(0);
+
             const filteredBooths = computed(() => {
                 if (currentFilter.value === 'all') return booths.value;
                 return booths.value.filter(b => b.status === currentFilter.value);
@@ -343,6 +356,21 @@
                 booths.value = await dbUtils.getAllBooths();
                 globalSettings.mapImage = await dbUtils.getSetting('mapImage');
             });
+
+            // 手势处理
+            const handleTouchStart = (e) => {
+                touchStartY.value = e.touches[0].clientY;
+            };
+            const handleTouchMove = (e) => {
+                touchCurrentY.value = e.touches[0].clientY;
+            };
+            const handleTouchEnd = (e) => {
+                const distance = e.changedTouches[0].clientY - touchStartY.value;
+                // 如果向下滑动超过 80px，则关闭详情页
+                if (distance > 80) {
+                    closeDetail();
+                }
+            };
 
             const exportData = async () => {
                 if (booths.value.length === 0 && !globalSettings.mapImage) return alert('还没有数据可以导出哦');
@@ -412,7 +440,7 @@
             };
             
             const viewBooth = (b) => activeBooth.value = b;
-            const closeDetail = () => activeBooth.value = null; // 触发 slide-up-leave 动画
+            const closeDetail = () => activeBooth.value = null; 
             
             const updateStatus = async (status) => {
                 if (!activeBooth.value) return;
@@ -435,7 +463,8 @@
                 booths, activeBooth, isEditing, isMenuOpen, form, currentFilter, filters, filteredBooths, globalSettings, placeholderImg, importInput,
                 triggerMapUpload, handleMapUpload, handleCoverUpload, openAddModal, editBooth, setMapPoint, saveForm,
                 viewBooth, closeDetail, updateStatus, deleteCurrentBooth, getStatusText, getStatusColor,
-                exportData, triggerImport, handleImport
+                exportData, triggerImport, handleImport,
+                handleTouchStart, handleTouchMove, handleTouchEnd
             };
         }
     }).mount('#app');
