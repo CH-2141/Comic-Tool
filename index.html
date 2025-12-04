@@ -37,30 +37,37 @@
 
 <div id="app" class="w-full h-screen flex flex-col bg-gray-50 overflow-hidden relative shadow-2xl">
 
-    <header class="bg-white px-4 py-3 shadow-sm z-10 flex justify-between items-center sticky top-0">
-        <div class="font-bold text-lg text-gray-800 flex items-center gap-2">
-            <i class="fa-solid fa-map-location-dot text-pink-500"></i>
+    <header class="bg-white px-3 py-3 shadow-sm z-10 flex justify-between items-center sticky top-0 shrink-0">
+        <div class="font-bold text-lg text-gray-800 flex items-center gap-2 shrink-0">
+            <i class="fa-solid fa-map-location-dot text-pink-500 text-2xl"></i>
             <span class="hidden sm:inline">漫展战术终端</span>
-            <span class="sm:hidden">战术终端</span>
         </div>
-        <div class="flex gap-2">
-            <div class="flex bg-gray-100 rounded-lg p-1 mr-2">
-                <button @click="exportData" class="px-3 py-1 text-xs text-gray-600 hover:text-pink-500 hover:bg-white rounded transition" title="导出分享">
-                    <i class="fa-solid fa-file-export"></i> 分享
+
+        <div class="flex items-center gap-2">
+            
+            <div class="flex bg-gray-100 rounded-lg p-1">
+                <button @click="exportData" class="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1 flex items-center justify-center text-gray-600 hover:text-pink-500 hover:bg-white rounded transition" title="导出分享">
+                    <i class="fa-solid fa-file-export"></i>
+                    <span class="hidden sm:inline ml-1 text-xs">分享</span>
                 </button>
-                <div class="w-[1px] bg-gray-300 my-1"></div>
-                <button @click="triggerImport" class="px-3 py-1 text-xs text-gray-600 hover:text-pink-500 hover:bg-white rounded transition" title="导入配置">
-                    <i class="fa-solid fa-file-import"></i> 导入
+                <div class="w-[1px] bg-gray-300 my-1 mx-0.5"></div>
+                <button @click="triggerImport" class="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 sm:py-1 flex items-center justify-center text-gray-600 hover:text-pink-500 hover:bg-white rounded transition" title="导入配置">
+                    <i class="fa-solid fa-file-import"></i>
+                    <span class="hidden sm:inline ml-1 text-xs">导入</span>
                 </button>
             </div>
 
-            <button @click="triggerMapUpload" class="text-sm text-gray-500 hover:text-pink-500 px-2">
-                <i class="fa-regular fa-image"></i> {{ globalSettings.mapImage ? '换图' : '设图' }}
+            <button @click="triggerMapUpload" class="w-8 h-8 sm:w-auto sm:px-2 flex items-center justify-center text-gray-500 hover:text-pink-500 rounded-full hover:bg-gray-100 transition" title="设置地图">
+                <i class="fa-regular fa-image text-lg"></i>
+                <span class="hidden sm:inline ml-1 text-sm">{{ globalSettings.mapImage ? '换图' : '设图' }}</span>
             </button>
-            <button @click="openAddModal" class="bg-pink-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-lg active:scale-95 transition whitespace-nowrap">
-                <i class="fa-solid fa-plus"></i> 记摊位
+
+            <button @click="openAddModal" class="bg-pink-500 text-white h-8 px-3 rounded-full text-sm font-medium shadow-lg active:scale-95 transition flex items-center gap-1 whitespace-nowrap">
+                <i class="fa-solid fa-plus"></i> 
+                <span>记摊位</span>
             </button>
         </div>
+
         <input type="file" ref="mapInput" class="hidden" accept="image/*" @change="handleMapUpload">
         <input type="file" ref="importInput" class="hidden" accept=".json" @change="handleImport">
     </header>
@@ -75,7 +82,7 @@
             </button>
         </div>
 
-        <div v-if="filteredBooths.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-20">
+        <div v-if="filteredBooths.length > 0" class="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pb-20">
             <div v-for="booth in filteredBooths" :key="booth.id" @click="viewBooth(booth)"
                 class="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition active:scale-95 cursor-pointer relative group border border-gray-100">
                 
@@ -288,18 +295,10 @@
                 globalSettings.mapImage = await dbUtils.getSetting('mapImage');
             });
 
-            // --- 新增：分享与导入功能 ---
-            
-            // 导出功能
+            // --- 导入导出功能 ---
             const exportData = async () => {
                 if (booths.value.length === 0 && !globalSettings.mapImage) return alert('还没有数据可以导出哦');
-                
-                const data = {
-                    version: 1.0,
-                    map: globalSettings.mapImage,
-                    list: booths.value
-                };
-                
+                const data = { version: 1.0, map: globalSettings.mapImage, list: booths.value };
                 const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
@@ -309,38 +308,28 @@
                 URL.revokeObjectURL(url);
             };
 
-            // 导入功能
             const triggerImport = () => importInput.value.click();
             const handleImport = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                
                 const reader = new FileReader();
                 reader.onload = async (event) => {
                     try {
                         const data = JSON.parse(event.target.result);
-                        if (!confirm(`确定要导入吗？\n这将包含 ${data.list ? data.list.length : 0} 个摊位。\n(注：会覆盖当前的地图设置)`)) return;
-
-                        // 1. 恢复地图
+                        if (!confirm(`确定要导入吗？\n包含 ${data.list ? data.list.length : 0} 个摊位。`)) return;
                         if (data.map) {
                             globalSettings.mapImage = data.map;
                             await dbUtils.saveSetting('mapImage', data.map);
                         }
-                        
-                        // 2. 恢复摊位 (追加模式)
                         if (data.list && Array.isArray(data.list)) {
-                            for (const item of data.list) {
-                                await dbUtils.saveBooth(item);
-                            }
-                            booths.value = await dbUtils.getAllBooths(); // 刷新视图
+                            for (const item of data.list) { await dbUtils.saveBooth(item); }
+                            booths.value = await dbUtils.getAllBooths();
                         }
                         alert("导入成功！");
-                    } catch (err) {
-                        alert("文件格式不对，请选择正确的json备份文件");
-                    }
+                    } catch (err) { alert("文件格式不对"); }
                 };
                 reader.readAsText(file);
-                e.target.value = ''; // 重置input防止无法重复选同文件
+                e.target.value = '';
             };
 
             // --- 原有逻辑 ---
