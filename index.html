@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>漫展战术终端 </title>
+    <title>漫展战术终端</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -40,7 +40,6 @@
         .status-soldout { border-left: 5px solid #ef4444; opacity: 0.7; filter: grayscale(100%); }
         .status-visited { border-left: 5px solid #8b5cf6; }
 
-        /* 修复：移除 will-change 防止模糊 */
         .slide-up-enter-active, .slide-up-leave-active { transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.2, 1); }
         .slide-up-enter-from, .slide-up-leave-to { transform: translate3d(0, 100%, 0); }
 
@@ -58,19 +57,14 @@
             background-size: 20px 20px;
         }
         
-        .map-layer {
-            transform-origin: 0 0;
-            /* 关键修复：移除 will-change，强制浏览器每次重绘原图 */
-            /* will-change: transform;  <-- 已删除 */
-        }
+        .map-layer { transform-origin: 0 0; }
 
         .map-pin {
             position: absolute; transform: translate3d(-50%, -100%, 0);
             filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); 
-            z-index: 10;
-            /* map-pin 不需要缩放，可以保留优化 */
-            will-change: transform; 
+            animation: bounce 0.6s infinite alternate; will-change: transform;
         }
+        @keyframes bounce { from { transform: translate3d(-50%, -100%, 0); } to { transform: translate3d(-50%, -115%, 0); } }
         
         .dragging-mode { box-shadow: none !important; transition: none !important; }
         .invisible-input { position: absolute; top: 0; left: 0; width: 0; height: 0; opacity: 0; pointer-events: none; }
@@ -101,7 +95,7 @@
 
         <div v-if="filteredBooths.length > 0" class="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 items-start min-h-[10px]">
             <div v-for="booth in filteredBooths" :key="booth.id" @click="viewBooth(booth)"
-                class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 active:scale-95 cursor-pointer relative group border border-gray-50 flex flex-col">
+                class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 active:scale-95 cursor-pointer relative group border border-gray-50 flex flex-col will-change-transform">
                 
                 <div class="aspect-card bg-gray-100 relative overflow-hidden shrink-0">
                     <img :src="booth.cover || placeholderImg" class="w-full h-full object-cover">
@@ -185,7 +179,21 @@
 
                 <div class="flex-1 overflow-y-auto hide-scrollbar bg-white" ref="modalContentRef">
                     
-                    <div class="m-5 rounded-2xl overflow-hidden border border-gray-200 shadow-inner h-[300px] relative bg-slate-100">
+                    <div class="mx-5 mt-2 rounded-2xl overflow-hidden border border-gray-100 shadow-sm relative aspect-video bg-gray-100">
+                        <img v-if="activeBooth.cover" :src="activeBooth.cover" class="w-full h-full object-cover">
+                        <div v-else class="flex flex-col items-center justify-center h-full text-gray-300">
+                            <i class="fa-solid fa-image text-3xl"></i>
+                            <span class="text-xs mt-2">暂无封面</span>
+                        </div>
+                    </div>
+
+                    <div class="px-6 py-4">
+                        <div class="text-gray-600 leading-7 bg-slate-50 p-4 rounded-2xl text-[15px] whitespace-pre-wrap border border-slate-100 min-h-[80px]">
+                            {{ activeBooth.goods || '暂无详细描述...' }}
+                        </div>
+                    </div>
+
+                    <div class="mx-5 mb-6 rounded-2xl overflow-hidden border border-gray-200 shadow-inner h-[250px] relative bg-slate-100">
                         <div v-if="!getMapImage(activeBooth.mapId)" class="h-full flex flex-col gap-2 items-center justify-center text-gray-400 text-sm">
                             <i class="fa-regular fa-map text-2xl"></i>
                             <span>未设置对应地图</span>
@@ -209,16 +217,8 @@
                                 双指缩放 / 单指移动
                             </div>
                         </div>
-                    </div>
-
-                    <div class="px-6 pb-6">
-                        <div class="text-gray-600 leading-7 bg-slate-50 p-4 rounded-2xl text-[15px] whitespace-pre-wrap border border-slate-100 min-h-[80px]">
-                            {{ activeBooth.goods || '暂无详细描述...' }}
-                        </div>
-                        <div class="mt-4" v-if="activeBooth.cover">
-                            <div class="w-24 h-24 rounded-2xl overflow-hidden border border-gray-100">
-                                <img :src="activeBooth.cover" class="w-full h-full object-cover">
-                            </div>
+                        <div class="absolute top-2 left-2 bg-cyan-primary/90 text-white text-xs px-2 py-1 rounded shadow-sm">
+                            <i class="fa-solid fa-map-pin mr-1"></i> {{ getMapName(activeBooth.mapId) }}
                         </div>
                     </div>
                 </div>
@@ -334,16 +334,16 @@
     const DB_NAME = 'ComicConDB';
     const DB_VERSION = 2;
     
-    // --- 核心：无损读取原图函数 (用于地图，保持 100% 清晰) ---
+    // 地图：不压缩
     const readFileOriginal = (file) => {
         return new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result); // 直接返回原数据，不压缩
+            reader.onload = (e) => resolve(e.target.result);
             reader.readAsDataURL(file);
         });
     };
 
-    // --- 核心：封面压缩函数 (用于封面，保持列表流畅) ---
+    // 封面：压缩
     const compressImage = (file, maxSize = 800, quality = 0.6) => {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -352,10 +352,8 @@
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     let w = img.width, h = img.height;
-                    
                     if (w > h && w > maxSize) { h *= maxSize/w; w = maxSize; }
                     else if (h > maxSize) { w *= maxSize/h; h = maxSize; }
-                    
                     canvas.width = w; canvas.height = h;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, w, h);
@@ -509,16 +507,12 @@
             const handleMapTap = (e) => {
                 const container = editMapContainer.value;
                 if (!container) return;
-                
                 const rect = container.getBoundingClientRect();
                 const touch = e.changedTouches[0];
-                
                 const clickX = touch.clientX - rect.left;
                 const clickY = touch.clientY - rect.top;
-                
                 const rawX = (clickX - mapTransform.x) / mapTransform.scale;
                 const rawY = (clickY - mapTransform.y) / mapTransform.scale;
-                
                 form.x = (rawX / rect.width) * 100;
                 form.y = (rawY / rect.height) * 100;
             };
@@ -582,11 +576,10 @@
             const openMapManager = () => isMapManagerOpen.value = true;
             const triggerAddMap = () => { if(mapInput.value) mapInput.value.click(); };
             
-            // --- 核心修改：使用 readFileOriginal 读取原图 ---
             const handleAddMap = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                const base64 = await readFileOriginal(file); // 原图上传，不压缩
+                const base64 = await readFileOriginal(file);
                 const newMap = { id: Date.now(), name: `场馆 ${maps.value.length + 1}`, image: base64 };
                 maps.value.push(newMap);
                 await dbUtils.saveSetting('maps', maps.value);
@@ -613,7 +606,7 @@
 
             const handleCoverUpload = async (e) => {
                 const file = e.target.files[0];
-                if (file) form.cover = await compressImage(file, 800, 0.6); // 封面继续压缩
+                if (file) form.cover = await compressImage(file, 800, 0.6);
             };
 
             const openAddModal = () => {
