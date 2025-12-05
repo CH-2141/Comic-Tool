@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>漫展战术终端 </title>
+    <title>漫展战术终端</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -40,7 +40,8 @@
         .status-soldout { border-left: 5px solid #ef4444; opacity: 0.7; filter: grayscale(100%); }
         .status-visited { border-left: 5px solid #8b5cf6; }
 
-        .slide-up-enter-active, .slide-up-leave-active { transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.2, 1); will-change: transform; }
+        /* 修复：移除 will-change 防止模糊 */
+        .slide-up-enter-active, .slide-up-leave-active { transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.2, 1); }
         .slide-up-enter-from, .slide-up-leave-to { transform: translate3d(0, 100%, 0); }
 
         .menu-pop-enter-active, .menu-pop-leave-active { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -49,12 +50,27 @@
         .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
 
+        .map-wrapper {
+            position: relative; overflow: hidden; 
+            touch-action: none; 
+            background-color: #f1f5f9;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        .map-layer {
+            transform-origin: 0 0;
+            /* 关键修复：移除 will-change，强制浏览器每次重绘原图 */
+            /* will-change: transform;  <-- 已删除 */
+        }
+
         .map-pin {
             position: absolute; transform: translate3d(-50%, -100%, 0);
             filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); 
-            animation: bounce 0.6s infinite alternate; will-change: transform;
+            z-index: 10;
+            /* map-pin 不需要缩放，可以保留优化 */
+            will-change: transform; 
         }
-        @keyframes bounce { from { transform: translate3d(-50%, -100%, 0); } to { transform: translate3d(-50%, -115%, 0); } }
         
         .dragging-mode { box-shadow: none !important; transition: none !important; }
         .invisible-input { position: absolute; top: 0; left: 0; width: 0; height: 0; opacity: 0; pointer-events: none; }
@@ -85,7 +101,7 @@
 
         <div v-if="filteredBooths.length > 0" class="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 items-start min-h-[10px]">
             <div v-for="booth in filteredBooths" :key="booth.id" @click="viewBooth(booth)"
-                class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 active:scale-95 cursor-pointer relative group border border-gray-50 flex flex-col will-change-transform">
+                class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-200 active:scale-95 cursor-pointer relative group border border-gray-50 flex flex-col">
                 
                 <div class="aspect-card bg-gray-100 relative overflow-hidden shrink-0">
                     <img :src="booth.cover || placeholderImg" class="w-full h-full object-cover">
@@ -181,7 +197,7 @@
                              @touchmove="mapHandlers.move" 
                              @touchend="mapHandlers.end">
                             
-                            <div :style="mapStyle" class="origin-top-left will-change-transform">
+                            <div :style="mapStyle" class="origin-top-left">
                                 <img :src="getMapImage(activeBooth.mapId)" class="block w-full h-auto pointer-events-none select-none">
                                 <div v-if="activeBooth.x !== null" class="map-pin text-cyan-primary text-4xl"
                                     :style="{ left: activeBooth.x + '%', top: activeBooth.y + '%', transform: `translate(-50%, -100%) scale(${1/mapTransform.scale})` }">
@@ -263,7 +279,7 @@
                              @touchmove="mapHandlers.move" 
                              @touchend="mapHandlers.end">
                              
-                            <div :style="mapStyle" class="origin-top-left will-change-transform">
+                            <div :style="mapStyle" class="origin-top-left">
                                 <img :src="getMapImage(form.mapId)" class="block w-full h-auto pointer-events-none select-none">
                                 <div v-if="form.x !== null" class="absolute w-5 h-5 bg-cyan-primary rounded-full border-[3px] border-white shadow-lg transform -translate-x-1/2 -translate-y-1/2"
                                     :style="{ left: form.x + '%', top: form.y + '%', transform: `translate(-50%, -100%) scale(${1/mapTransform.scale})` }"></div>
@@ -318,7 +334,7 @@
     const DB_NAME = 'ComicConDB';
     const DB_VERSION = 2;
     
-    // --- 核心：无损读取原图函数 (用于地图) ---
+    // --- 核心：无损读取原图函数 (用于地图，保持 100% 清晰) ---
     const readFileOriginal = (file) => {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -566,12 +582,11 @@
             const openMapManager = () => isMapManagerOpen.value = true;
             const triggerAddMap = () => { if(mapInput.value) mapInput.value.click(); };
             
-            // --- 核心修改：地图使用 readFileOriginal (不压缩) ---
+            // --- 核心修改：使用 readFileOriginal 读取原图 ---
             const handleAddMap = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                // 改用 readFileOriginal，不进行任何压缩
-                const base64 = await readFileOriginal(file);
+                const base64 = await readFileOriginal(file); // 原图上传，不压缩
                 const newMap = { id: Date.now(), name: `场馆 ${maps.value.length + 1}`, image: base64 };
                 maps.value.push(newMap);
                 await dbUtils.saveSetting('maps', maps.value);
@@ -596,10 +611,9 @@
             };
             const switchEditMap = (id) => form.mapId = id;
 
-            // --- 核心：封面图继续使用压缩 ---
             const handleCoverUpload = async (e) => {
                 const file = e.target.files[0];
-                if (file) form.cover = await compressImage(file, 800, 0.6);
+                if (file) form.cover = await compressImage(file, 800, 0.6); // 封面继续压缩
             };
 
             const openAddModal = () => {
