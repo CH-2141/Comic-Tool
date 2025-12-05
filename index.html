@@ -50,6 +50,16 @@
         .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
 
+        .map-wrapper {
+            position: relative; overflow: hidden; 
+            touch-action: none; 
+            background-color: #f1f5f9;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        .map-layer { transform-origin: 0 0; }
+
         .map-pin {
             position: absolute; transform: translate3d(-50%, -100%, 0);
             filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); 
@@ -65,18 +75,18 @@
 
 <div id="app" class="w-full h-[100dvh] flex flex-col bg-slate-50 relative">
 
-    <header class="bg-white/95 backdrop-blur-sm px-5 py-3 z-10 flex justify-center items-center sticky top-0 shrink-0 border-b border-gray-100 shadow-sm">
+    <header class="bg-white/95 backdrop-blur-sm px-5 py-3 z-20 flex justify-center items-center sticky top-0 shrink-0 border-b border-gray-100 shadow-sm">
         <div class="font-bold text-lg text-gray-800 flex items-center gap-2">
             <i class="fa-solid fa-map-location-dot text-cyan-primary text-xl"></i>
             <span class="tracking-wide">漫展战术终端</span>
         </div>
     </header>
 
-    <main class="flex-1 overflow-y-auto p-4 hide-scrollbar pb-40 scroll-container"
+    <main class="flex-1 overflow-y-auto px-4 pb-40 hide-scrollbar scroll-container"
           @touchstart="handleListTouchStart" 
           @touchend="handleListTouchEnd">
         
-        <div class="sticky top-0 z-10 -mx-4 px-4 pt-1 pb-3 bg-slate-50/95 backdrop-blur-sm space-y-3 mb-2">
+        <div class="sticky top-0 z-10 -mx-4 px-4 pt-4 pb-3 bg-slate-50/95 backdrop-blur-sm space-y-3 mb-2 shadow-sm">
             <div class="relative group">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-cyan-primary transition"></i>
                 <input v-model="searchQuery" type="text" placeholder="搜索摊位号、名称、谷子..." 
@@ -364,7 +374,7 @@
     const DB_NAME = 'ComicConDB';
     const DB_VERSION = 2;
     
-    // 地图原图
+    // 地图：不压缩
     const readFileOriginal = (file) => {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -373,7 +383,7 @@
         });
     };
 
-    // 封面压缩
+    // 封面：压缩
     const compressImage = (file, maxSize = 800, quality = 0.6) => {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -455,14 +465,9 @@
             const isMenuOpen = ref(false);
             const isMapManagerOpen = ref(false);
             const currentFilter = ref('all');
-            
-            // --- 3.0 新增状态 ---
             const searchQuery = ref('');
-            const sortBy = ref('time_desc'); // time_desc, rating_desc, name_asc
-            
+            const sortBy = ref('time_desc');
             const placeholderImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f1f5f9'/%3E%3Ctext x='50' y='50' font-family='Arial' font-size='12' fill='%23cbd5e1' text-anchor='middle' dy='.3em'%3ENO IMG%3C/text%3E%3C/svg%3E";
-            
-            // form 新增 rating
             const form = reactive({ id: null, name: '', goods: '', cover: null, x: null, y: null, status: 'pending', mapId: null, rating: 3 });
             
             const filtersList = ['all', 'pending', 'bought', 'soldout'];
@@ -487,11 +492,9 @@
 
             const mapTransform = reactive({ x: 0, y: 0, scale: 1 });
             const mapStyle = computed(() => ({ transform: `translate(${mapTransform.x}px, ${mapTransform.y}px) scale(${mapTransform.scale})` }));
-            
             const resetMap = () => Object.assign(mapTransform, { x: 0, y: 0, scale: 1 });
             watch([isEditing, activeBooth], () => resetMap());
 
-            // --- 排序逻辑计算属性 ---
             const sortLabel = computed(() => {
                 if (sortBy.value === 'time_desc') return '时间';
                 if (sortBy.value === 'rating_desc') return '热度';
@@ -506,34 +509,19 @@
                 return 'fa-sort';
             });
 
-            // --- 核心过滤与排序 ---
             const filteredBooths = computed(() => {
                 let list = booths.value;
-                
-                // 1. Tab 过滤
                 if (currentFilter.value !== 'all') {
                     list = list.filter(b => b.status === currentFilter.value);
                 }
-                
-                // 2. 搜索过滤 (名称 或 商品)
                 if (searchQuery.value.trim()) {
                     const q = searchQuery.value.toLowerCase();
                     list = list.filter(b => (b.name && b.name.toLowerCase().includes(q)) || (b.goods && b.goods.toLowerCase().includes(q)));
                 }
-                
-                // 3. 排序
-                // 创建副本避免修改原数组
                 return list.slice().sort((a, b) => {
-                    if (sortBy.value === 'rating_desc') {
-                        // 评分高到低，同分按时间
-                        return (b.rating || 0) - (a.rating || 0) || (b.id - a.id);
-                    } else if (sortBy.value === 'name_asc') {
-                        // 拼音 A-Z
-                        return (a.name || '').localeCompare(b.name || '', 'zh-CN');
-                    } else {
-                        // 默认：时间倒序 (ID大到小)
-                        return b.id - a.id;
-                    }
+                    if (sortBy.value === 'rating_desc') return (b.rating || 0) - (a.rating || 0) || (b.id - a.id);
+                    else if (sortBy.value === 'name_asc') return (a.name || '').localeCompare(b.name || '', 'zh-CN');
+                    else return b.id - a.id;
                 });
             });
 
@@ -685,7 +673,6 @@
 
             const openAddModal = () => {
                 const defaultMapId = maps.value.length > 0 ? maps.value[0].id : null;
-                // 默认 3 星
                 Object.assign(form, { id: null, name: '', goods: '', cover: null, x: null, y: null, status: 'pending', mapId: defaultMapId, rating: 3 });
                 isEditing.value = true;
             };
@@ -693,7 +680,6 @@
             const editBooth = (booth) => {
                 Object.assign(form, JSON.parse(JSON.stringify(booth)));
                 if (!form.mapId && maps.value.length > 0) form.mapId = maps.value[0].id;
-                // 兼容旧数据
                 if (form.rating === undefined) form.rating = 3;
                 isEditing.value = true; activeBooth.value = null;
             };
