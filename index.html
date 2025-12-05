@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>漫展战术终端</title>
+    <title>漫展战术终端 Multi-Map Fix</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -57,6 +57,13 @@
         @keyframes bounce { from { transform: translate3d(-50%, -100%, 0); } to { transform: translate3d(-50%, -115%, 0); } }
         
         .dragging-mode { box-shadow: none !important; transition: none !important; }
+        
+        /* 修复：隐身模式的 input，确保能被点击 */
+        .invisible-input {
+            position: absolute;
+            top: 0; left: 0; width: 0; height: 0;
+            opacity: 0; pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -222,7 +229,7 @@
                             <span class="text-xs font-medium">封面图</span>
                         </div>
                     </div>
-                    <input type="file" ref="coverInput" class="hidden" accept="image/*" @change="handleCoverUpload">
+                    <input type="file" ref="coverInput" class="invisible-input" accept="image/*" @change="handleCoverUpload">
                     <div class="space-y-3">
                         <input v-model="form.name" type="text" placeholder="摊位号 / 名称 (例如 A-12)" class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none focus:ring-2 focus:ring-cyan-primary/20 outline-none text-gray-800 font-bold">
                         <textarea v-model="form.goods" placeholder="想买什么谷子？记下来..." rows="3" class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none focus:ring-2 focus:ring-cyan-primary/20 outline-none resize-none text-gray-800"></textarea>
@@ -282,9 +289,9 @@
         </div>
     </transition>
 
-    <input type="file" ref="mapInput" class="hidden" accept="image/*" @change="handleAddMap">
-    <input type="file" ref="coverInput" class="hidden" accept="image/*" @change="handleCoverUpload">
-    <input type="file" ref="importInput" class="hidden" accept=".json" @change="handleImport">
+    <input type="file" ref="mapInput" class="invisible-input" accept="image/*" @change="handleAddMap">
+    <input type="file" ref="coverInput" class="invisible-input" accept="image/*" @change="handleCoverUpload">
+    <input type="file" ref="importInput" class="invisible-input" accept=".json" @change="handleImport">
 
 </div>
 
@@ -292,8 +299,31 @@
     const { createApp, ref, computed, onMounted, reactive } = Vue;
 
     const DB_NAME = 'ComicConDB';
-    const DB_VERSION = 2; // 升级数据库版本
+    const DB_VERSION = 2;
     
+    // --- 核心工具：图片压缩 (提前定义，防止 TDZ) ---
+    const compressImage = (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = img.width, h = img.height;
+                    const max = 800; // 限制最大 800px
+                    if (w > h && w > max) { h *= max/w; w = max; }
+                    else if (h > max) { w *= max/h; h = max; }
+                    canvas.width = w; canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', 0.6));
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
     const dbUtils = {
         db: null,
         async init() {
@@ -348,15 +378,13 @@
     createApp({
         setup() {
             const booths = ref([]);
-            const maps = ref([]); // 新增：多地图数组
+            const maps = ref([]); 
             const activeBooth = ref(null);
             const isEditing = ref(false);
             const isMenuOpen = ref(false);
             const isMapManagerOpen = ref(false);
             const currentFilter = ref('all');
             const placeholderImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f1f5f9'/%3E%3Ctext x='50' y='50' font-family='Arial' font-size='12' fill='%23cbd5e1' text-anchor='middle' dy='.3em'%3ENO IMG%3C/text%3E%3C/svg%3E";
-            
-            // 表单新增 mapId 字段
             const form = reactive({ id: null, name: '', goods: '', cover: null, x: null, y: null, status: 'pending', mapId: null });
             
             const filtersList = ['all', 'pending', 'bought', 'soldout'];
@@ -386,12 +414,10 @@
                 await dbUtils.init();
                 booths.value = await dbUtils.getAllBooths();
                 
-                // --- 数据迁移逻辑 ---
                 const savedMaps = await dbUtils.getSetting('maps');
                 if (savedMaps && Array.isArray(savedMaps)) {
                     maps.value = savedMaps;
                 } else {
-                    // 尝试从旧版迁移
                     const oldMap = await dbUtils.getSetting('mapImage');
                     if (oldMap) {
                         const newMap = { id: Date.now(), name: '主展馆', image: oldMap };
@@ -401,7 +427,6 @@
                 }
             });
 
-            // --- 列表左右滑动切换 ---
             const handleListTouchStart = (e) => {
                 listStartX = e.touches[0].clientX;
                 listStartY = e.touches[0].clientY;
@@ -416,7 +441,6 @@
                 }
             };
 
-            // --- 详情页物理手势 ---
             const handleModalTouchStart = (e) => {
                 if (modalContentRef.value && modalContentRef.value.scrollTop > 0) return;
                 isDragging.value = true;
@@ -437,18 +461,22 @@
                 else dragOffset.value = 0;
             };
 
-            // --- 多地图管理逻辑 ---
             const openMapManager = () => isMapManagerOpen.value = true;
-            const triggerAddMap = () => mapInput.value.click();
+            
+            // 修复：触发点击
+            const triggerAddMap = () => {
+                if(mapInput.value) mapInput.value.click();
+            };
             
             const handleAddMap = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
+                // 使用提前定义的 compressImage
                 const base64 = await compressImage(file);
                 const newMap = { id: Date.now(), name: `场馆 ${maps.value.length + 1}`, image: base64 };
                 maps.value.push(newMap);
                 await dbUtils.saveSetting('maps', maps.value);
-                e.target.value = ''; // Reset input
+                e.target.value = ''; 
             };
 
             const saveMaps = async () => await dbUtils.saveSetting('maps', maps.value);
@@ -471,35 +499,12 @@
 
             const switchEditMap = (id) => form.mapId = id;
 
-            // --- 通用逻辑 ---
-            const compressImage = (file) => {
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const img = new Image();
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            let w = img.width, h = img.height;
-                            const max = 800; // 压缩尺寸
-                            if (w > h && w > max) { h *= max/w; w = max; }
-                            else if (h > max) { w *= max/h; h = max; }
-                            canvas.width = w; canvas.height = h;
-                            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                            resolve(canvas.toDataURL('image/jpeg', 0.6));
-                        };
-                        img.src = e.target.result;
-                    };
-                    reader.readAsDataURL(file);
-                });
-            };
-
             const handleCoverUpload = async (e) => {
                 const file = e.target.files[0];
                 if (file) form.cover = await compressImage(file);
             };
 
             const openAddModal = () => {
-                // 默认选中第一个地图
                 const defaultMapId = maps.value.length > 0 ? maps.value[0].id : null;
                 Object.assign(form, { id: null, name: '', goods: '', cover: null, x: null, y: null, status: 'pending', mapId: defaultMapId });
                 isEditing.value = true;
@@ -507,7 +512,6 @@
 
             const editBooth = (booth) => {
                 Object.assign(form, JSON.parse(JSON.stringify(booth)));
-                // 兼容旧数据：如果没有mapId，赋予第一个
                 if (!form.mapId && maps.value.length > 0) form.mapId = maps.value[0].id;
                 isEditing.value = true; activeBooth.value = null;
             };
@@ -521,7 +525,6 @@
             const saveForm = async () => {
                 if (!form.name) return alert('请填写摊位名称');
                 const newBooth = { ...form, id: form.id || Date.now() };
-                // 确保有 mapId
                 if (!newBooth.mapId && maps.value.length > 0) newBooth.mapId = maps.value[0].id;
                 
                 const index = booths.value.findIndex(b => b.id === newBooth.id);
@@ -552,7 +555,6 @@
                 closeDetail();
             };
 
-            // 导出逻辑：包含地图数组
             const exportData = async () => {
                 const data = { version: 2.0, maps: maps.value, list: booths.value };
                 const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
@@ -572,7 +574,6 @@
                         const data = JSON.parse(event.target.result);
                         if (!confirm(`确定导入？\n含 ${data.list ? data.list.length : 0} 个摊位。`)) return;
                         
-                        // 兼容旧版 V1 数据
                         if (data.version !== 2.0 && data.map) {
                             const legacyMap = { id: Date.now(), name: '导入地图', image: data.map };
                             maps.value = [legacyMap];
@@ -596,7 +597,7 @@
                 booths, maps, activeBooth, isEditing, isMenuOpen, isMapManagerOpen, form, currentFilter, filters, filteredBooths, placeholderImg, 
                 mapInput, coverInput, importInput, modalContentRef, dragOffset, isDragging,
                 handleListTouchStart, handleListTouchEnd, handleModalTouchStart, handleModalTouchMove, handleModalTouchEnd,
-                openMapManager, handleAddMap, saveMaps, deleteMap, getMapImage, getMapName, switchEditMap,
+                openMapManager, triggerAddMap, handleAddMap, saveMaps, deleteMap, getMapImage, getMapName, switchEditMap,
                 handleCoverUpload, openAddModal, editBooth, setMapPoint, saveForm,
                 viewBooth, closeDetail, updateStatus, deleteCurrentBooth, exportData, triggerImport, handleImport
             };
