@@ -33,8 +33,7 @@
         .scroll-container { -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        /* 修改：将卡片比例改为正方形，配合 object-contain 显示全图 */
-        .aspect-card { aspect-ratio: 1/1; }
+        .aspect-card { aspect-ratio: 1/1; } /* 封面正方形 */
         
         .status-pending { border-left: 5px solid #94a3b8; }
         .status-bought { border-left: 5px solid #06b6d4; }
@@ -577,17 +576,19 @@
             const openMapManager = () => isMapManagerOpen.value = true;
             const triggerAddMap = () => { if(mapInput.value) mapInput.value.click(); };
             
+            // 核心修复：确保添加新地图时保存的也是纯对象
             const handleAddMap = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const base64 = await readFileOriginal(file);
                 const newMap = { id: Date.now(), name: `场馆 ${maps.value.length + 1}`, image: base64 };
                 maps.value.push(newMap);
-                await dbUtils.saveSetting('maps', maps.value);
+                await dbUtils.saveSetting('maps', JSON.parse(JSON.stringify(maps.value)));
                 e.target.value = ''; 
             };
 
-            const saveMaps = async () => await dbUtils.saveSetting('maps', maps.value);
+            // 核心修复：地图改名/删除时也使用纯对象保存
+            const saveMaps = async () => await dbUtils.saveSetting('maps', JSON.parse(JSON.stringify(maps.value)));
             
             const deleteMap = async (idx) => {
                 if(!confirm('确定删除这张地图吗？')) return;
