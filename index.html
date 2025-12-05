@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>漫展战术终端 </title>
+    <title>漫展战术终端</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -49,25 +49,12 @@
         .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
 
-        /* 地图容器样式 */
-        .map-wrapper {
-            position: relative; overflow: hidden; 
-            touch-action: none; /* 关键：禁止浏览器默认手势，交给JS处理 */
-            background-color: #f1f5f9;
-            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-        
-        .map-layer {
-            transform-origin: 0 0;
-            will-change: transform;
-        }
-
         .map-pin {
-            position: absolute; transform: translate(-50%, -100%);
+            position: absolute; transform: translate3d(-50%, -100%, 0);
             filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3)); 
-            z-index: 10;
+            animation: bounce 0.6s infinite alternate; will-change: transform;
         }
+        @keyframes bounce { from { transform: translate3d(-50%, -100%, 0); } to { transform: translate3d(-50%, -115%, 0); } }
         
         .dragging-mode { box-shadow: none !important; transition: none !important; }
         .invisible-input { position: absolute; top: 0; left: 0; width: 0; height: 0; opacity: 0; pointer-events: none; }
@@ -188,13 +175,13 @@
                             <span>未设置对应地图</span>
                         </div>
                         <div v-else 
-                             class="map-wrapper w-full h-full"
+                             class="w-full h-full relative overflow-hidden touch-none"
                              ref="viewMapContainer"
                              @touchstart="mapHandlers.start" 
                              @touchmove="mapHandlers.move" 
                              @touchend="mapHandlers.end">
                             
-                            <div class="map-layer" :style="mapStyle">
+                            <div :style="mapStyle" class="origin-top-left will-change-transform">
                                 <img :src="getMapImage(activeBooth.mapId)" class="block w-full h-auto pointer-events-none select-none">
                                 <div v-if="activeBooth.x !== null" class="map-pin text-cyan-primary text-4xl"
                                     :style="{ left: activeBooth.x + '%', top: activeBooth.y + '%', transform: `translate(-50%, -100%) scale(${1/mapTransform.scale})` }">
@@ -270,13 +257,13 @@
                         </div>
                         
                         <div v-else 
-                             class="map-wrapper w-full h-[250px] rounded-xl border border-gray-200 shadow-sm"
+                             class="w-full h-[250px] rounded-xl border border-gray-200 shadow-sm relative overflow-hidden touch-none"
                              ref="editMapContainer"
                              @touchstart="mapHandlers.start" 
                              @touchmove="mapHandlers.move" 
                              @touchend="mapHandlers.end">
                              
-                            <div class="map-layer" :style="mapStyle">
+                            <div :style="mapStyle" class="origin-top-left will-change-transform">
                                 <img :src="getMapImage(form.mapId)" class="block w-full h-auto pointer-events-none select-none">
                                 <div v-if="form.x !== null" class="absolute w-5 h-5 bg-cyan-primary rounded-full border-[3px] border-white shadow-lg transform -translate-x-1/2 -translate-y-1/2"
                                     :style="{ left: form.x + '%', top: form.y + '%', transform: `translate(-50%, -100%) scale(${1/mapTransform.scale})` }"></div>
@@ -331,7 +318,8 @@
     const DB_NAME = 'ComicConDB';
     const DB_VERSION = 2;
     
-    const compressImage = (file) => {
+    // --- 核心修复：支持参数化压缩 ---
+    const compressImage = (file, maxSize = 800, quality = 0.6) => {
         return new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -339,13 +327,14 @@
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     let w = img.width, h = img.height;
-                    const max = 800;
-                    if (w > h && w > max) { h *= max/w; w = max; }
-                    else if (h > max) { w *= max/h; h = max; }
+                    
+                    if (w > h && w > maxSize) { h *= maxSize/w; w = maxSize; }
+                    else if (h > maxSize) { w *= maxSize/h; h = maxSize; }
+                    
                     canvas.width = w; canvas.height = h;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, w, h);
-                    resolve(canvas.toDataURL('image/jpeg', 0.6));
+                    resolve(canvas.toDataURL('image/jpeg', quality));
                 };
                 img.src = e.target.result;
             };
@@ -431,25 +420,19 @@
             const viewMapContainer = ref(null);
             const editMapContainer = ref(null);
             
-            // 列表手势
             const touchStartY = ref(0);
             let listStartX = 0, listStartY = 0;
             
-            // 弹窗拖拽
             const dragOffset = ref(0);
             const isDragging = ref(false);
 
-            // --- 地图缩放核心逻辑 ---
             const mapTransform = reactive({ x: 0, y: 0, scale: 1 });
             const mapStyle = computed(() => ({ transform: `translate(${mapTransform.x}px, ${mapTransform.y}px) scale(${mapTransform.scale})` }));
             
-            // 重置地图状态
             const resetMap = () => Object.assign(mapTransform, { x: 0, y: 0, scale: 1 });
             
-            // 监听编辑或详情打开，重置地图
             watch([isEditing, activeBooth], () => resetMap());
 
-            // 地图手势处理
             const mapVars = {
                 startDist: 0, startScale: 1,
                 startX: 0, startY: 0,
@@ -475,12 +458,12 @@
                 },
                 move: (e) => {
                     if (e.touches.length === 2 && mapVars.isPinching) {
-                        e.preventDefault(); // 阻止缩放时页面滚动
+                        e.preventDefault();
                         const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
                         const newScale = mapVars.startScale * (dist / mapVars.startDist);
-                        mapTransform.scale = Math.min(Math.max(newScale, 0.5), 5); // 限制缩放 0.5x - 5x
+                        mapTransform.scale = Math.min(Math.max(newScale, 0.5), 5);
                     } else if (e.touches.length === 1 && !mapVars.isPinching) {
-                        e.preventDefault(); // 阻止拖动地图时页面滚动
+                        e.preventDefault();
                         const dx = e.touches[0].clientX - mapVars.startX;
                         const dy = e.touches[0].clientY - mapVars.startY;
                         mapTransform.x = mapVars.lastX + dx;
@@ -488,11 +471,9 @@
                     }
                 },
                 end: (e) => {
-                    // 处理点击打点 (仅在编辑模式且没有大幅移动时)
                     if (isEditing.value && !mapVars.isPinching) {
                         const duration = Date.now() - mapVars.startTime;
                         const dist = Math.hypot(mapTransform.x - mapVars.lastX, mapTransform.y - mapVars.lastY);
-                        // 点击判定：时间短且移动距离小
                         if (duration < 300 && dist < 5) {
                             handleMapTap(e);
                         }
@@ -500,21 +481,16 @@
                 }
             };
 
-            // 核心：处理点击打点 (坐标换算)
             const handleMapTap = (e) => {
                 const container = editMapContainer.value;
                 if (!container) return;
                 
-                // 获取容器的边界
                 const rect = container.getBoundingClientRect();
                 const touch = e.changedTouches[0];
                 
-                // 计算点击相对于容器的坐标
                 const clickX = touch.clientX - rect.left;
                 const clickY = touch.clientY - rect.top;
                 
-                // 关键：反向计算出在原图中的百分比坐标
-                // 公式：(点击位置 - 偏移量) / 缩放倍率 / 容器宽高 * 100
                 const rawX = (clickX - mapTransform.x) / mapTransform.scale;
                 const rawY = (clickY - mapTransform.y) / mapTransform.scale;
                 
@@ -584,7 +560,8 @@
             const handleAddMap = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                const base64 = await compressImage(file);
+                // 核心：地图使用高清配置 (3000px, 0.9)
+                const base64 = await compressImage(file, 3000, 0.9);
                 const newMap = { id: Date.now(), name: `场馆 ${maps.value.length + 1}`, image: base64 };
                 maps.value.push(newMap);
                 await dbUtils.saveSetting('maps', maps.value);
@@ -611,7 +588,8 @@
 
             const handleCoverUpload = async (e) => {
                 const file = e.target.files[0];
-                if (file) form.cover = await compressImage(file);
+                // 核心：封面使用低清配置 (800px, 0.6)
+                if (file) form.cover = await compressImage(file, 800, 0.6);
             };
 
             const openAddModal = () => {
@@ -626,8 +604,7 @@
                 isEditing.value = true; activeBooth.value = null;
             };
 
-            // setMapPoint 被 handleMapTap 替代，保留空函数防报错
-            const setMapPoint = () => {};
+            const setMapPoint = () => {}; // Legacy
 
             const saveForm = async () => {
                 if (!form.name) return alert('请填写摊位名称');
@@ -697,7 +674,7 @@
             return {
                 booths, maps, activeBooth, isEditing, isMenuOpen, isMapManagerOpen, form, currentFilter, filters, filteredBooths, placeholderImg, 
                 mapInput, coverInput, importInput, modalContentRef, dragOffset, isDragging, editMapContainer, viewMapContainer,
-                mapStyle, mapTransform, mapHandlers, // 导出地图相关
+                mapStyle, mapTransform, mapHandlers,
                 handleListTouchStart, handleListTouchEnd, handleModalTouchStart, handleModalTouchMove, handleModalTouchEnd,
                 openMapManager, triggerAddMap, handleAddMap, saveMaps, deleteMap, getMapImage, getMapName, switchEditMap,
                 handleCoverUpload, openAddModal, editBooth, setMapPoint, saveForm,
